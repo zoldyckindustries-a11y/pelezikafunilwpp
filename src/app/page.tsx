@@ -9,11 +9,11 @@ import ChatIndividual from "./components/ChatIndividual";
 import PitchPage from "./components/PitchPage";
 import { useNavigation } from "../hooks/useNavigation";
 import { useCounter } from "../hooks/useCounter";
+import { useBackRedirect } from "../hooks/useBackRedirect";
 import { colors, glassmorphism } from "../constants/theme";
-import { ReactElement } from "react";
+import { ReactElement, useRef, useState } from "react";
 import {
   Lock,
-  ChevronDown,
   TriangleAlert,
   MessageCircle,
   Smile,
@@ -23,6 +23,8 @@ import {
   Heart,
   Smartphone,
   Loader2,
+  Check,
+  User,
 } from "lucide-react";
 
 interface HomeProps {
@@ -42,6 +44,19 @@ export default function Home(props: HomeProps) {
     skipIntro: props.skipIntro,
   });
   const counter = useCounter({ autoStart: !navigation.showIntro });
+  // botão voltar cai na oferta de retorno em vez de sair do funil
+  useBackRedirect();
+  // Sem isto o campo não responde ao toque: a borda só reagia quando já
+  // havia conteúdo, então focar não dava retorno nenhum.
+  const [focusedField, setFocusedField] = useState<"name" | "phone" | null>(
+    null
+  );
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+
+  const fieldBorder = (field: "name" | "phone", filled: boolean) => {
+    if (focusedField === field) return colors.primaryBright;
+    return filled ? colors.primary : colors.gray[200];
+  };
 
   // Se está na tela de pitch, mostrar apenas ela
   if (navigation.showPitch) {
@@ -105,6 +120,7 @@ export default function Home(props: HomeProps) {
       <ProfileConfirmModal
         isOpen={navigation.showModal}
         username={navigation.instagramHandle}
+        targetName={navigation.targetName}
         onConfirm={navigation.handleModalConfirm}
         onCancel={navigation.handleModalCancel}
         profileImageUrl={navigation.profileImageUrl}
@@ -138,7 +154,7 @@ export default function Home(props: HomeProps) {
           className="fixed top-0 left-0 right-0 z-10 flex justify-center"
           style={{ paddingTop: "max(1rem, calc(1rem + env(safe-area-inset-top, 0px)))" }}
         >
-          <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-40 lg:h-40">
+          <div className="w-16 h-16 sm:w-24 sm:h-24 md:w-32 md:h-32 lg:w-40 lg:h-40">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo.svg"
@@ -197,8 +213,8 @@ export default function Home(props: HomeProps) {
         <div
           className="relative z-10 min-h-screen flex items-center justify-center"
           style={{
-            paddingTop: "calc(9.5rem + env(safe-area-inset-top, 0px))",
-            paddingBottom: "calc(2.5rem + env(safe-area-inset-bottom, 0px))",
+            paddingTop: "calc(6rem + env(safe-area-inset-top, 0px))",
+            paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))",
           }}
         >
           <div className="px-6 w-full max-w-6xl mx-auto">
@@ -225,36 +241,40 @@ export default function Home(props: HomeProps) {
 
               {/* Container com efeito glass */}
               <div
-                className="rounded-3xl p-8 pt-12 shadow-xl border border-white/20 backdrop-blur-lg"
+                className="rounded-3xl px-6 pb-6 pt-16 md:p-8 md:pt-16 shadow-xl border border-white/20 backdrop-blur-lg"
                 style={glassmorphism}
               >
                 {/* Descrição com títulos maiores */}
-                <div className="text-center mb-8">
-                  <h1 className="text-2xl md:text-3xl font-bold leading-tight mb-4 pt-7 text-gray-900">
+                <div className="text-center mb-5">
+                  <h1 className="text-[20px] md:text-3xl font-bold leading-tight mb-2.5 text-gray-900">
                     {props.search_title ? (
                       props.search_title
                     ) : (
                       <>
-                        O que seu{" "}
+                        Sua intuição{" "}
                         <span className={colors.gradients.primaryText}>
-                          Cônjuge
-                        </span>{" "}
-                        faz quando está no WhatsApp?
+                          nunca errou
+                        </span>
+                        . Tire a prova real agora mesmo.
                       </>
                     )}
                   </h1>
-                  <h2 className="text-lg md:text-xl font-semibold leading-relaxed text-gray-700">
+                  <h2
+                    className={`text-[15px] md:text-xl font-semibold leading-snug text-gray-700 ${
+                      navigation.showSearchCard ? "hidden" : ""
+                    }`}
+                  >
                     {props.search_subtitle ? (
                       props.search_subtitle
                     ) : (
                       <>
-                        Descubra a verdade sobre{" "}
                         <span
                           className={`${colors.gradients.primaryText} font-bold`}
                         >
-                          qualquer pessoa
+                          Sem ninguém saber
                         </span>
-                        , acessando o WhatsApp dela!
+                        , você vê tudo. Mensagem apagada, celular trancado,
+                        desculpa pronta — nada disso te impede. Basta o número.
                       </>
                     )}
                   </h2>
@@ -265,28 +285,28 @@ export default function Home(props: HomeProps) {
                   <div className="mb-6">
                     {/* Ícone estilo tela de boas-vindas do WhatsApp */}
                     <div
-                      className="mx-auto mb-5 rounded-full flex items-center justify-center relative overflow-hidden"
+                      className="mx-auto mb-3 rounded-full flex items-center justify-center relative overflow-hidden"
                       style={{
-                        width: 104,
-                        height: 104,
+                        width: 64,
+                        height: 64,
                         backgroundColor: `${colors.primary}12`,
                       }}
                     >
-                      <div className="grid grid-cols-3 gap-3 opacity-40">
-                        <Smile className="w-4 h-4" style={{ color: colors.primary }} />
-                        <Camera className="w-4 h-4" style={{ color: colors.primary }} />
-                        <Mic className="w-4 h-4" style={{ color: colors.primary }} />
-                        <MapPin className="w-4 h-4" style={{ color: colors.primary }} />
-                        <Heart className="w-4 h-4" style={{ color: colors.primary }} />
-                        <MessageCircle className="w-4 h-4" style={{ color: colors.primary }} />
+                      <div className="grid grid-cols-3 gap-2 opacity-40">
+                        <Smile className="w-3 h-3" style={{ color: colors.primary }} />
+                        <Camera className="w-3 h-3" style={{ color: colors.primary }} />
+                        <Mic className="w-3 h-3" style={{ color: colors.primary }} />
+                        <MapPin className="w-3 h-3" style={{ color: colors.primary }} />
+                        <Heart className="w-3 h-3" style={{ color: colors.primary }} />
+                        <MessageCircle className="w-3 h-3" style={{ color: colors.primary }} />
                       </div>
                       <div
-                        className="absolute w-11 h-11 rounded-full flex items-center justify-center shadow-lg"
+                        className="absolute w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
                         style={{ backgroundColor: "#25D366" }}
                       >
                         <svg
                           viewBox="0 0 24 24"
-                          className="w-7 h-7"
+                          className="w-5 h-5"
                           fill="#ffffff"
                           aria-hidden="true"
                         >
@@ -295,23 +315,55 @@ export default function Home(props: HomeProps) {
                       </div>
                     </div>
 
-                    {/* Aviso estilo tela de boas-vindas do WhatsApp */}
-                    <p className="text-center text-xs text-gray-500 mb-5 px-2 leading-relaxed">
-                      Seus dados são tratados com sigilo total. Ao continuar,
-                      você concorda com nossa{" "}
-                      <span
-                        className="font-semibold"
-                        style={{ color: colors.primary }}
-                      >
-                        Política de Privacidade
-                      </span>
-                      .
-                    </p>
+                    {/* Os três passos: mostra de saída que são poucos e rápidos */}
+                    <div className="flex items-start mb-4 px-1">
+                      {[
+                        "Informe o número",
+                        "Analisamos o backup",
+                        "Você vê as conversas",
+                      ].map((passo, i) => (
+                        <div key={passo} className="flex-1 flex flex-col items-center relative">
+                          {i > 0 && (
+                            <span
+                              className="absolute top-[13px] right-1/2 w-full h-px"
+                              style={{ backgroundColor: `${colors.primary}33` }}
+                            />
+                          )}
+                          <div
+                            className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-[12px] font-bold relative z-10 mb-1.5"
+                            style={
+                              i === 0
+                                ? {
+                                    backgroundColor: colors.primaryBright,
+                                    color: "#fff",
+                                    boxShadow: `0 0 0 3px ${colors.primaryBright}26`,
+                                  }
+                                : {
+                                    backgroundColor: "#fff",
+                                    color: "#9CA3AF",
+                                    border: "1px solid #E5E7EB",
+                                  }
+                            }
+                          >
+                            {i + 1}
+                          </div>
+                          <span
+                            className="text-[10.5px] leading-tight text-center px-0.5"
+                            style={{
+                              color: i === 0 ? colors.primary : "#9CA3AF",
+                              fontWeight: i === 0 ? 700 : 500,
+                            }}
+                          >
+                            {passo}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
 
                     <button
                       onClick={navigation.handleTestClick}
                       disabled={navigation.isTransitioning}
-                      className={`w-full text-white py-4 px-6 rounded-full font-semibold shadow-sm transition-all duration-300 active:scale-[0.98] hover:-translate-y-0.5 hover:brightness-110 ${
+                      className={`w-full text-white py-3.5 px-6 rounded-full font-bold text-[17px] shadow-sm transition-all duration-300 active:scale-[0.98] hover:-translate-y-0.5 hover:brightness-110 ${
                         navigation.isTransitioning ? "opacity-50" : ""
                       }`}
                       style={{
@@ -322,14 +374,14 @@ export default function Home(props: HomeProps) {
                       Verificar Agora
                     </button>
 
-                    {/* Texto de segurança */}
-                    <div className="text-center mt-3">
-                      <div className="flex items-center justify-center space-x-2 text-gray-600">
+                    {/* Selo de anonimato e aviso legal, compactos sob o botão */}
+                    <div className="text-center mt-2.5 space-y-1">
+                      <div className="flex items-start justify-center gap-1.5 text-gray-600">
                         <Lock
-                          className="w-4 h-4"
+                          className="w-3.5 h-3.5 flex-shrink-0 mt-[3px]"
                           style={{ color: colors.primary }}
                         />
-                        <span className="text-sm font-medium text-left">
+                        <span className="text-[13px] font-medium text-left">
                           100% Anônimo. A pessoa{" "}
                           <span
                             className="font-bold"
@@ -340,6 +392,16 @@ export default function Home(props: HomeProps) {
                           vai saber.
                         </span>
                       </div>
+                      <p className="text-[10.5px] text-gray-400 leading-snug">
+                        Ao continuar, você concorda com nossa{" "}
+                        <span
+                          className="font-semibold"
+                          style={{ color: `${colors.primary}B3` }}
+                        >
+                          Política de Privacidade
+                        </span>
+                        .
+                      </p>
                     </div>
                   </div>
                 ) : (
@@ -362,60 +424,144 @@ export default function Home(props: HomeProps) {
                         </div>
                       </div>
 
-                      {/* Seletor de país, no padrão nativo do WhatsApp */}
-                      <div
-                        className="w-full flex items-center justify-between py-3 border-b"
-                        style={{ borderColor: colors.gray[200] }}
-                      >
-                        <span
-                          className="text-base font-medium"
-                          style={{ color: "#111827" }}
-                        >
-                          Brasil
+                      {/* Campo do nome: rótulo próprio em vez de só
+                          placeholder, que some assim que a pessoa digita e
+                          deixa o campo sem contexto */}
+                      <label className="block mb-4">
+                        <span className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                          Nome da pessoa
                         </span>
-                        <ChevronDown
-                          className="w-4 h-4"
-                          style={{ color: "#9CA3AF" }}
-                        />
-                      </div>
-
-                      {/* Campo do número, no padrão nativo do WhatsApp */}
-                      <div
-                        className="flex items-center py-3 border-b-2 transition-colors duration-300"
-                        style={{
-                          borderColor: navigation.isPhoneValid
-                            ? colors.primary
-                            : colors.gray[200],
-                        }}
-                      >
                         <span
-                          className="font-medium mr-3"
-                          style={{ fontSize: "16px", color: "#111827" }}
-                        >
-                          +55
-                        </span>
-                        <input
-                          type="tel"
-                          inputMode="numeric"
-                          autoComplete="off"
-                          autoCorrect="off"
-                          spellCheck={false}
-                          placeholder="Insira o número"
-                          aria-label="Insira o número de telefone"
-                          maxLength={16}
-                          className="flex-1 bg-transparent text-gray-900 placeholder-gray-600 font-medium"
+                          className="flex items-center gap-2.5 rounded-xl px-3.5 py-3 transition-colors duration-200"
                           style={{
-                            fontSize: "16px",
-                            outline: "none",
-                            boxShadow: "none",
-                            WebkitAppearance: "none",
-                            appearance: "none",
+                            backgroundColor: "#F6F7F9",
+                            border: `1.5px solid ${fieldBorder(
+                              "name",
+                              !!navigation.targetName.trim()
+                            )}`,
                           }}
-                          value={navigation.instagramHandle}
-                          onChange={navigation.handleInputChange}
-                          onFocus={navigation.handleInputFocus}
-                        />
-                      </div>
+                        >
+                          <User
+                            className="w-4 h-4 flex-shrink-0"
+                            style={{ color: "#9CA3AF" }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Ex: Maria"
+                            aria-label="Digite o nome da pessoa"
+                            maxLength={50}
+                            autoCapitalize="words"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            enterKeyHint="next"
+                            className="flex-1 min-w-0 bg-transparent text-gray-900 placeholder-gray-400 font-medium"
+                            style={{
+                              fontSize: "16px",
+                              outline: "none",
+                              boxShadow: "none",
+                              WebkitAppearance: "none",
+                              appearance: "none",
+                            }}
+                            value={navigation.targetName}
+                            onChange={navigation.handleNameChange}
+                            onFocus={() => setFocusedField("name")}
+                            onBlur={() => setFocusedField(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                phoneInputRef.current?.focus();
+                              }
+                            }}
+                          />
+                          {navigation.isNameValid && (
+                            <Check
+                              className="w-4 h-4 flex-shrink-0"
+                              style={{ color: colors.primaryBright }}
+                            />
+                          )}
+                        </span>
+                      </label>
+
+                      {/* Número: país e DDI ficam dentro do mesmo campo. Eram
+                          duas linhas separadas, e a seta do "Brasil" prometia
+                          um seletor que não existe — agora é um selo fixo. */}
+                      <label className="block">
+                        <span className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                          Número do WhatsApp
+                        </span>
+                        <span
+                          className="flex items-center rounded-xl pr-3.5 transition-colors duration-200 overflow-hidden"
+                          style={{
+                            backgroundColor: "#F6F7F9",
+                            border: `1.5px solid ${fieldBorder(
+                              "phone",
+                              navigation.isPhoneValid
+                            )}`,
+                          }}
+                        >
+                          <span
+                            className="flex items-center gap-1.5 self-stretch pl-3.5 pr-3 flex-shrink-0"
+                            style={{ borderRight: "1px solid #E5E7EB" }}
+                            title="Disponível apenas para números do Brasil"
+                          >
+                            <span className="text-[15px] leading-none">🇧🇷</span>
+                            <span
+                              className="text-[15px] font-semibold"
+                              style={{ color: "#111827" }}
+                            >
+                              +55
+                            </span>
+                            <Check
+                              className="w-3 h-3 flex-shrink-0"
+                              style={{ color: colors.primaryBright }}
+                            />
+                          </span>
+
+                          <input
+                            ref={phoneInputRef}
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            enterKeyHint="go"
+                            placeholder="(00) 00000-0000"
+                            aria-label="Insira o número de telefone"
+                            maxLength={16}
+                            className="flex-1 min-w-0 bg-transparent text-gray-900 placeholder-gray-400 font-medium py-3 pl-3"
+                            style={{
+                              fontSize: "16px",
+                              outline: "none",
+                              boxShadow: "none",
+                              WebkitAppearance: "none",
+                              appearance: "none",
+                            }}
+                            value={navigation.instagramHandle}
+                            onChange={navigation.handleInputChange}
+                            onFocus={() => {
+                              setFocusedField("phone");
+                              navigation.handleInputFocus();
+                            }}
+                            onBlur={() => setFocusedField(null)}
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "Enter" &&
+                                navigation.isPhoneValid &&
+                                navigation.isNameValid
+                              ) {
+                                e.preventDefault();
+                                navigation.handleSearch();
+                              }
+                            }}
+                          />
+                          {navigation.isPhoneValid && (
+                            <Check
+                              className="w-4 h-4 flex-shrink-0 ml-2"
+                              style={{ color: colors.primaryBright }}
+                            />
+                          )}
+                        </span>
+                      </label>
 
                       <p className="text-xs text-gray-500 mt-3">
                         Sujeita a cobranças da sua operadora.
@@ -427,6 +573,7 @@ export default function Home(props: HomeProps) {
                           onClick={() => navigation.handleSearch()}
                           disabled={
                             !navigation.isPhoneValid ||
+                            !navigation.isNameValid ||
                             navigation.isFetchingProfileImage
                           }
                           className="px-10 py-3 rounded-full font-semibold text-white tracking-wide transition-all duration-300 disabled:cursor-not-allowed active:scale-[0.98] hover:brightness-110"

@@ -23,6 +23,14 @@ import {
   Star,
   CheckCircle2,
   HelpCircle,
+  Phone,
+  Video,
+  MoreVertical,
+  ArrowLeft,
+  CheckCheck,
+  Smile,
+  Paperclip,
+  Mic,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, usePathname } from "next/navigation";
@@ -161,6 +169,536 @@ interface AnalysisChecklistItem {
   threshold: number;
 }
 
+// Achados que pipocam durante a análise. Ficam ancorados no rodapé, longe do
+// vídeo: a VSL é o ativo da página e nada pode competir com ela.
+interface AnalysisFinding {
+  icon: typeof MessageCircle;
+  title: (alvo: string) => string;
+  detail: string;
+  bg: string;
+  color: string;
+  at: number;
+}
+
+// Mockups das provas, desenhados em CSS no visual do WhatsApp escuro.
+// Substituem os vídeos antigos, que estavam em inglês e com fotos sem blur —
+// qualquer um dos dois entrega a farsa na hora.
+const WA_DARK = "#0B141A";
+const WA_PANEL = "#202C33";
+const WA_BUBBLE_IN = "#202C33";
+const WA_BUBBLE_OUT = "#005C4B";
+const WA_MUTED = "#8696A0";
+
+function MockHeader({ alvo }: { alvo: string }) {
+  return (
+    <div
+      className="flex items-center gap-2 px-2.5 py-2"
+      style={{ backgroundColor: WA_PANEL }}
+    >
+      <ArrowLeft
+        className="w-4 h-4 flex-shrink-0"
+        style={{ color: "#AEBAC1" }}
+      />
+      <div
+        className="w-8 h-8 rounded-full blur-[3px] flex-shrink-0"
+        style={{ backgroundColor: "#F4CF8E" }}
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-[12px] font-semibold text-white truncate">{alvo}</p>
+        <p className="text-[10px]" style={{ color: "#8696A0" }}>
+          online
+        </p>
+      </div>
+      {/* Chamadas e menu: sem eles o topo não lê como uma conversa aberta */}
+      <div className="flex items-center gap-3.5 flex-shrink-0 pr-0.5">
+        <Video className="w-[18px] h-[18px]" style={{ color: "#AEBAC1" }} />
+        <Phone className="w-4 h-4" style={{ color: "#AEBAC1" }} />
+        <MoreVertical className="w-4 h-4" style={{ color: "#AEBAC1" }} />
+      </div>
+    </div>
+  );
+}
+
+function MockChat({ alvo }: { alvo: string }) {
+  const bolhas = [
+    { out: false, w: "68%", h: 28, hora: "23:14" },
+    { out: true, w: "54%", h: 24, hora: "23:16" },
+    { out: false, w: "78%", h: 40, hora: "23:21" },
+  ];
+  return (
+    <div
+      className="w-full"
+      style={{
+        backgroundColor: WA_DARK,
+        // trama do papel de parede do WhatsApp, bem discreta
+        backgroundImage:
+          "radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px)",
+        backgroundSize: "18px 18px",
+      }}
+    >
+      <MockHeader alvo={alvo} />
+      <div className="px-3 py-2.5 space-y-1.5">
+        {/* Divisor de data, como no app */}
+        <div className="flex justify-center pb-1">
+          <span
+            className="text-[9px] font-medium px-2 py-0.5 rounded"
+            style={{ backgroundColor: "#182229", color: WA_MUTED }}
+          >
+            ONTEM
+          </span>
+        </div>
+
+        {bolhas.map((b, i) => (
+          <div
+            key={i}
+            className={`flex ${b.out ? "justify-end" : "justify-start"}`}
+          >
+            <div
+              className="rounded-lg relative px-2 pb-3.5 pt-1.5"
+              style={{
+                width: b.w,
+                backgroundColor: b.out ? WA_BUBBLE_OUT : WA_BUBBLE_IN,
+              }}
+            >
+              {/* corpo da mensagem, ilegível de propósito */}
+              <div
+                className="rounded blur-[3px]"
+                style={{
+                  height: b.h - 14,
+                  backgroundColor: "rgba(255,255,255,0.22)",
+                }}
+              />
+              <span
+                className="absolute bottom-0.5 right-2 flex items-center gap-0.5 text-[8px]"
+                style={{ color: "rgba(255,255,255,0.45)" }}
+              >
+                {b.hora}
+                {b.out && (
+                  <CheckCheck className="w-2.5 h-2.5" style={{ color: "#53BDEB" }} />
+                )}
+              </span>
+            </div>
+          </div>
+        ))}
+
+        {/* As duas legíveis: o gancho */}
+        <div className="flex justify-start">
+          <div
+            className="rounded-lg px-2.5 py-1.5 flex items-center gap-1.5"
+            style={{ backgroundColor: WA_BUBBLE_IN, maxWidth: "85%" }}
+          >
+            <Trash2
+              className="w-3 h-3 flex-shrink-0"
+              style={{ color: WA_MUTED }}
+            />
+            <span className="text-[11px] italic" style={{ color: WA_MUTED }}>
+              Esta mensagem foi apagada
+            </span>
+            <span className="text-[8px] ml-1" style={{ color: WA_MUTED }}>
+              23:48
+            </span>
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <div
+            className="rounded-lg px-2.5 pt-1.5 pb-1 relative"
+            style={{ backgroundColor: WA_BUBBLE_OUT, maxWidth: "85%" }}
+          >
+            <span className="text-[11px] text-white">
+              foi ótimo te ver hoje
+            </span>
+            <span
+              className="flex items-center justify-end gap-0.5 text-[8px] mt-0.5"
+              style={{ color: "rgba(255,255,255,0.5)" }}
+            >
+              23:52
+              <CheckCheck className="w-2.5 h-2.5" style={{ color: "#53BDEB" }} />
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Barra de digitação: fecha a moldura da conversa */}
+      <div className="flex items-center gap-1.5 px-2 py-2">
+        <div
+          className="flex items-center gap-2 flex-1 rounded-full px-2.5 py-1.5"
+          style={{ backgroundColor: WA_PANEL }}
+        >
+          <Smile className="w-3.5 h-3.5 flex-shrink-0" style={{ color: WA_MUTED }} />
+          <span className="text-[10.5px] flex-1" style={{ color: WA_MUTED }}>
+            Mensagem
+          </span>
+          <Paperclip
+            className="w-3.5 h-3.5 flex-shrink-0"
+            style={{ color: WA_MUTED }}
+          />
+        </div>
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: "#00A884" }}
+        >
+          <Mic className="w-3.5 h-3.5 text-white" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MockGallery({ alvo }: { alvo: string }) {
+  const tons = [
+    "#8B6F47",
+    "#6B7B8C",
+    "#A0725A",
+    "#7A8471",
+    "#9C6B6B",
+    "#5F7A8A",
+  ];
+  return (
+    <div className="w-full" style={{ backgroundColor: WA_DARK }}>
+      <MockHeader alvo={alvo} />
+      <div className="px-2.5 pt-2.5 pb-1">
+        <p
+          className="text-[10px] font-semibold uppercase tracking-wide mb-2"
+          style={{ color: WA_MUTED }}
+        >
+          Mídia enviada em privado
+        </p>
+        <div className="grid grid-cols-3 gap-1">
+          {tons.map((t, i) => (
+            <div
+              key={i}
+              className="relative rounded-md overflow-hidden"
+              style={{ aspectRatio: "1 / 1" }}
+            >
+              <div
+                className="absolute inset-0 blur-[5px]"
+                style={{
+                  background: `linear-gradient(135deg, ${t} 0%, ${t}99 50%, #2A3942 100%)`,
+                }}
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Lock className="w-3.5 h-3.5 text-white/75" />
+              </div>
+              {i === 1 && (
+                <div
+                  className="absolute bottom-1 left-1 px-1 py-0.5 rounded"
+                  style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+                >
+                  <span className="text-[7px] font-bold text-white">1x</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MockMap({
+  alvo,
+  place,
+  coords,
+}: {
+  alvo: string;
+  place: string | null;
+  coords: { lat: number; lon: number } | null;
+}) {
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  // Zoom de bairro: ruas e quarteirões aparecem, mas o endereço exato não.
+  const mapUrl =
+    token && coords
+      ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${coords.lon},${coords.lat},14,0/480x330?access_token=${token}&attribution=false&logo=false`
+      : null;
+
+  return (
+    <div className="w-full" style={{ backgroundColor: WA_DARK }}>
+      <MockHeader alvo={alvo} />
+      <div
+        className="relative w-full overflow-hidden"
+        style={{ aspectRatio: "16 / 11", backgroundColor: "#1B2B33" }}
+      >
+        {mapUrl ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={mapUrl}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+            className="absolute inset-0 w-full h-full object-cover select-none"
+            style={{ filter: "blur(3px)", transform: "scale(1.06)" }}
+          />
+        ) : (
+          /* Sem token ou sem coordenadas: malha neutra no lugar do mapa */
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                "repeating-linear-gradient(0deg, transparent, transparent 26px, rgba(255,255,255,0.06) 26px, rgba(255,255,255,0.06) 28px), repeating-linear-gradient(90deg, transparent, transparent 38px, rgba(255,255,255,0.06) 38px, rgba(255,255,255,0.06) 40px)",
+            }}
+          />
+        )}
+
+        {/* Véu leve: escurece o suficiente para o pin ler, sem apagar as
+            cores do mapa — são elas que fazem parecer um print de verdade */}
+        <div
+          className="absolute inset-0"
+          style={{ backgroundColor: "rgba(11,20,26,0.28)" }}
+        />
+
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <motion.span
+            animate={{ scale: [1, 2.1], opacity: [0.35, 0] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: "easeOut" }}
+            className="absolute w-12 h-12 rounded-full"
+            style={{ backgroundColor: "#25D366" }}
+          />
+          {/* Pin de mapa com o cadeado dentro */}
+          <div className="relative z-10 flex flex-col items-center">
+            <div
+              className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg"
+              style={{
+                backgroundColor: "#25D366",
+                border: "3px solid rgba(255,255,255,0.9)",
+              }}
+            >
+              <Lock className="w-5 h-5 text-white" strokeWidth={2.5} />
+            </div>
+            <div
+              style={{
+                width: 0,
+                height: 0,
+                borderLeft: "7px solid transparent",
+                borderRight: "7px solid transparent",
+                borderTop: "10px solid rgba(255,255,255,0.9)",
+                marginTop: -3,
+              }}
+            />
+          </div>
+          <span
+            className="relative z-10 mt-2 text-[12px] font-bold text-white"
+            style={{ textShadow: "0 1px 4px rgba(0,0,0,0.8)" }}
+          >
+            Localização bloqueada
+          </span>
+        </div>
+      </div>
+      <div className="px-3 py-2.5 flex items-center justify-between">
+        <div className="min-w-0">
+          <p className="text-[11.5px] font-semibold text-white truncate">
+            {place ? `Visto em ${place}` : "Localização em tempo real"}
+          </p>
+          <p className="text-[10px]" style={{ color: WA_MUTED }}>
+            Ontem, 23h47 · a 4,2 km do endereço habitual
+          </p>
+        </div>
+        <Lock
+          className="w-3.5 h-3.5 flex-shrink-0 ml-2"
+          style={{ color: WA_MUTED }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MockAudio({ alvo }: { alvo: string }) {
+  const audios = [
+    { out: false, dur: "0:47", hora: "01:12" },
+    { out: true, dur: "1:23", hora: "02:38" },
+    { out: false, dur: "0:19", hora: "03:04" },
+  ];
+  return (
+    <div className="w-full" style={{ backgroundColor: WA_DARK }}>
+      <MockHeader alvo={alvo} />
+      <div className="px-3 py-3 space-y-2.5">
+        {audios.map((a, i) => (
+          <div
+            key={i}
+            className={`flex ${a.out ? "justify-end" : "justify-start"}`}
+          >
+            <div
+              className="rounded-lg px-2.5 py-2 flex items-center gap-2"
+              style={{
+                backgroundColor: a.out ? WA_BUBBLE_OUT : WA_BUBBLE_IN,
+                width: "82%",
+              }}
+            >
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: "rgba(255,255,255,0.14)" }}
+              >
+                <Lock className="w-3 h-3 text-white/80" />
+              </div>
+              {/* onda sonora */}
+              <div className="flex items-center gap-[2px] flex-1 h-5">
+                {Array.from({ length: 22 }).map((_, b) => (
+                  <span
+                    key={b}
+                    className="flex-1 rounded-full"
+                    style={{
+                      height: `${25 + ((b * 37) % 70)}%`,
+                      backgroundColor: "rgba(255,255,255,0.4)",
+                    }}
+                  />
+                ))}
+              </div>
+              <span
+                className="text-[9.5px] flex-shrink-0"
+                style={{ color: "rgba(255,255,255,0.65)" }}
+              >
+                {a.dur}
+              </span>
+            </div>
+          </div>
+        ))}
+        <p
+          className="text-[10px] text-center pt-1"
+          style={{ color: WA_MUTED }}
+        >
+          Enviados entre 01h e 03h
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Blocos de evidência da oferta. Cada um é um "dossiê" fechado: etiqueta da
+// categoria, o que foi achado, a prova em vídeo e o selo de bloqueio.
+interface EvidenceBlock {
+  tag: string;
+  icon: typeof MessageCircle;
+  headline: (alvo: string) => { before: string; target: string; after: string };
+  body: (alvo: string) => string;
+  mock: "chat" | "gallery" | "map" | "audio";
+  lockLabel: string;
+}
+
+const EVIDENCE_BLOCKS: EvidenceBlock[] = [
+  {
+    tag: "Mensagens apagadas recuperadas",
+    icon: MessageCircle,
+    headline: (alvo) => ({
+      before: "Recuperamos as mensagens excluídas do WhatsApp de",
+      target: alvo,
+      after: "",
+    }),
+    body: (alvo) =>
+      `Conversas que ${alvo} apagou achando que ninguém mais veria. Nosso sistema restaurou o conteúdo direto do backup.`,
+    mock: "chat" as const,
+    lockLabel: "Conversas bloqueadas",
+  },
+  {
+    tag: "Fotos privadas encontradas",
+    icon: ImageIcon,
+    headline: (alvo) => ({
+      before: "Encontramos fotos enviadas em privado por",
+      target: alvo,
+      after: "",
+    }),
+    body: () =>
+      "Imagens trocadas em conversas privadas, incluindo as de visualização única que desaparecem depois de abertas.",
+    mock: "gallery" as const,
+    lockLabel: "Mídia bloqueada",
+  },
+  {
+    tag: "Localização em segredo",
+    icon: MapPin,
+    headline: (alvo) => ({
+      before: "",
+      target: alvo,
+      after: "compartilhou a localização em horários suspeitos",
+    }),
+    body: () =>
+      "Detectamos a rota real percorrida e os locais fora da rotina habitual — com data e hora de cada parada.",
+    mock: "map" as const,
+    lockLabel: "Localização bloqueada",
+  },
+  {
+    tag: "Áudios interceptados",
+    icon: Volume2,
+    headline: (alvo) => ({
+      before: "Interceptamos os áudios enviados por",
+      target: alvo,
+      after: "",
+    }),
+    body: () =>
+      "Mensagens de voz capturadas e transcritas, inclusive as enviadas de madrugada e apagadas em seguida.",
+    mock: "audio" as const,
+    lockLabel: "Áudios bloqueados",
+  },
+];
+
+// Depoimentos em vídeo (public/depoimentos)
+const DEPOIMENTOS = [
+  {
+    arquivo: "1.mp4",
+    nome: "Marcelo R.",
+    legenda: "Descobri em 3 minutos o que suspeitei por meses.",
+  },
+  {
+    arquivo: "2.mp4",
+    nome: "Diego A.",
+    legenda: "Valeu cada centavo pela paz de espírito.",
+  },
+  {
+    arquivo: "3.mp4",
+    nome: "Juliana M.",
+    legenda: "Ela nunca soube que eu tinha visto.",
+  },
+];
+
+const ANALYSIS_FINDINGS: AnalysisFinding[] = [
+  {
+    icon: MessageCircle,
+    title: () => "47 mensagens apagadas recuperadas",
+    detail: "Excluídas nas últimas 72 horas",
+    bg: "#DCFCE7",
+    color: "#16A34A",
+    at: 14,
+  },
+  {
+    icon: ImageIcon,
+    title: (alvo) => `Fotos enviadas em privado por ${alvo}`,
+    detail: "8 arquivos restaurados do backup",
+    bg: "#FCE7F3",
+    color: "#DB2777",
+    at: 30,
+  },
+  {
+    icon: Eye,
+    title: () => "3 fotos de visualização única restauradas",
+    detail: "Quem enviou acredita que sumiram",
+    bg: "#EDE9FE",
+    color: "#7C3AED",
+    at: 46,
+  },
+  {
+    icon: MapPin,
+    title: (alvo) => `${alvo} compartilhou localização em segredo`,
+    detail: "Ontem, 23h47 — fora da rota habitual",
+    bg: "#FEF3C7",
+    color: "#D97706",
+    at: 62,
+  },
+  {
+    icon: Volume2,
+    title: () => "12 áudios interceptados de madrugada",
+    detail: "Enviados entre 00h e 04h",
+    bg: "#DBEAFE",
+    color: "#2563EB",
+    at: 78,
+  },
+  {
+    icon: Users,
+    title: () => "2 conversas arquivadas em segredo",
+    detail: "Ocultas da lista principal",
+    bg: "#FEE2E2",
+    color: "#DC2626",
+    at: 91,
+  },
+];
+
 const analysisChecklist: AnalysisChecklistItem[] = [
   {
     icon: MessageCircle,
@@ -214,35 +752,33 @@ const AccordionItem = ({ faq, index }: { faq: FAQ; index: number }) => {
       custom={index}
       initial="hidden"
       animate="visible"
-      whileHover={{ scale: 1.01 }}
-      className="border-b border-gray-200"
+      className="rounded-2xl overflow-hidden"
+      style={{
+        backgroundColor: "#111B21",
+        border: "1px solid rgba(255,255,255,0.05)",
+      }}
     >
       <h2>
-        <motion.button
+        <button
           type="button"
-          className="flex items-center justify-between w-full py-4 px-1 font-medium text-left text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+          className="flex items-center justify-between gap-3 w-full px-4 py-3.5 text-left"
           onClick={() => setIsOpen(!isOpen)}
           aria-expanded={isOpen}
-          whileHover={{ x: 5 }}
-          transition={{ duration: 0.2 }}
         >
-          <span className="flex items-start">
-            <HelpCircle
-              className="w-4 h-4 mr-2 mt-1 flex-shrink-0"
-              style={{ color: primaryColor }}
-            />
+          <span className="text-[13.5px] font-semibold text-white leading-snug">
             {faq.question}
           </span>
           <motion.div
             animate={{ rotate: isOpen ? 180 : 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="flex-shrink-0"
           >
             <ChevronDown
-              className="w-5 h-5"
-              style={{ color: primaryColor }}
+              className="w-4 h-4"
+              style={{ color: primaryBright }}
             />
           </motion.div>
-        </motion.button>
+        </button>
       </h2>
       <AnimatePresence initial={false}>
         {isOpen && (
@@ -282,10 +818,11 @@ const AccordionItem = ({ faq, index }: { faq: FAQ; index: number }) => {
                 },
               },
             }}
-            className="overflow-hidden px-1"
+            className="overflow-hidden"
           >
             <motion.div
-              className="text-gray-600 text-sm leading-relaxed whitespace-pre-line pb-4"
+              className="text-[12.5px] leading-relaxed whitespace-pre-line px-4 pb-3.5"
+              style={{ color: "#8696A0" }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2, duration: 0.3 }}
@@ -312,6 +849,13 @@ export default function PitchPage({
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showVsl, setShowVsl] = useState(true);
   const [showFloatingCta, setShowFloatingCta] = useState(false);
+  const [activeFinding, setActiveFinding] = useState<number | null>(null);
+  const [leadPlace, setLeadPlace] = useState<string | null>(null);
+  const [leadCoords, setLeadCoords] = useState<{
+    lat: number;
+    lon: number;
+  } | null>(null);
+  const shownFindings = useRef<Set<number>>(new Set());
   const heroRef = useRef<HTMLDivElement>(null);
   const pricingRef = useRef<HTMLDivElement>(null);
 
@@ -384,6 +928,25 @@ export default function PitchPage({
     };
   }, []);
 
+  // Dispara cada achado uma única vez, quando a análise passa do seu marco
+  useEffect(() => {
+    if (isUnlocked) return;
+    const next = ANALYSIS_FINDINGS.findIndex(
+      (f, i) => analysisPercent >= f.at && !shownFindings.current.has(i)
+    );
+    if (next === -1) return;
+    shownFindings.current.add(next);
+    setActiveFinding(next);
+  }, [analysisPercent, isUnlocked]);
+
+  // Recolhe o achado sozinho — separado do disparo para o timer não ser
+  // cancelado a cada avanço da barra de progresso
+  useEffect(() => {
+    if (activeFinding === null) return;
+    const t = setTimeout(() => setActiveFinding(null), 4600);
+    return () => clearTimeout(t);
+  }, [activeFinding]);
+
   useEffect(() => {
     // Atualiza o username quando o componente monta
     const searchedUsername = localStorage.getItem("searchedUsername");
@@ -394,6 +957,25 @@ export default function PitchPage({
     const storedProfilePic = localStorage.getItem("userProfilePic");
     if (storedProfilePic) {
       setProfileImageUrl(storedProfilePic);
+    }
+
+    // Cidade real do lead, gravada pelo locationService na busca
+    const storedLocation = localStorage.getItem("userLocation");
+    if (storedLocation) {
+      try {
+        const loc = JSON.parse(storedLocation);
+        if (loc?.city) {
+          setLeadPlace(loc.state ? `${loc.city}, ${loc.state}` : loc.city);
+        }
+        if (
+          typeof loc?.latitude === "number" &&
+          typeof loc?.longitude === "number"
+        ) {
+          setLeadCoords({ lat: loc.latitude, lon: loc.longitude });
+        }
+      } catch {
+        // localStorage corrompido não pode derrubar a página
+      }
     }
 
     // Escuta o evento de atualização do username
@@ -895,8 +1477,8 @@ export default function PitchPage({
       default:
         return (
           <>
-            Se Eu Fosse Você, Eu Já Teria{" "}
-            <span style={{ color: primaryColor }}>Visto Isso</span>
+            Acesso Total à{" "}
+            <span style={{ color: primaryColor }}>Verdade</span>
           </>
         );
     }
@@ -960,9 +1542,14 @@ export default function PitchPage({
   }
 
   return (
-    <AnimatePresence>
+    <>
+      {/* Só o conteúdo que anima a saída fica dentro do AnimatePresence. Com
+          os blocos fixos aqui dentro, cada irmão sem key virava key "" e o
+          React acusava chaves duplicadas a cada render. */}
+      <AnimatePresence>
       {!isExiting && (
         <motion.div
+          key="pitch-page-content"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1, transition: { duration: 0.4 } }}
           exit={{
@@ -970,7 +1557,6 @@ export default function PitchPage({
             scale: 0.95,
             transition: { duration: 0.3 },
           }}
-          key="pitch-page-content"
           className="min-h-screen bg-white text-gray-800 font-sans pt-12 md:pt-10"
         >
           {/* Barra Fixa no Topo: análise em andamento, depois timer de acesso */}
@@ -1343,6 +1929,7 @@ export default function PitchPage({
             <AnimatePresence>
               {isUnlocked && (
                 <motion.div
+                  key="oferta-liberada"
                   initial={{ opacity: 0, y: 24 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6 }}
@@ -1430,13 +2017,43 @@ export default function PitchPage({
                   ? "O Que Você Vai Desbloquear com o Sistema da Operadora:"
                   : ""}
                 {pathname == "/05"
-                  ? "O Que a Ferramenta Revela Usando a Falha da Meta:"
+                  ? "O Acesso Profundo que Você Precisa:"
                   : ""}
 
                 {pathname == "/" || pathname == "/01" || pathname == "/roc"
-                  ? "Adquira seu Acesso VIP e Tenha Acesso Imediato a:"
+                  ? ""
                   : ""}
               </motion.h2>
+
+              {/* Abertura do dossiê — só na oferta principal */}
+              {(pathname == "/" ||
+                pathname == "/01" ||
+                pathname == "/roc") && (
+                <motion.div variants={fadeInUp} className="text-center mb-7">
+                  <div
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full mb-4"
+                    style={{
+                      backgroundColor: `${primaryColor}14`,
+                      color: primaryColor,
+                    }}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="text-[11px] font-bold uppercase tracking-wider">
+                      Resultado da análise
+                    </span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 leading-tight">
+                    Isto é o que encontramos no WhatsApp de{" "}
+                    <span style={{ color: primaryColor }}>
+                      {currentUsername}
+                    </span>
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-2.5 max-w-md mx-auto leading-relaxed">
+                    Cada item abaixo foi recuperado do backup e está pronto para
+                    ser liberado na sua conta.
+                  </p>
+                </motion.div>
+              )}
 
               <div
                 style={pathname == "/02" ? {} : { display: "none" }}
@@ -1629,276 +2246,102 @@ export default function PitchPage({
                     ? {}
                     : { display: "none" }
                 }
-                className="space-y-16"
+                className="space-y-5"
               >
-                {/* Localização em Tempo Real */}
-                <motion.div
-                  variants={scaleIn}
-                  custom={0}
-                  initial="hidden"
-                  animate="visible"
-                  className="text-center space-y-6"
-                >
-                  <div className="text-center mb-4">
-                    <MapPin
-                      className="w-12 h-12 mx-auto mb-3"
-                      style={{ color: primaryColor }}
-                    />
-                    <h3 className="text-2xl font-semibold text-gray-900">
-                      Localização em Tempo Real
-                    </h3>
-                  </div>
-                  <p className="text-gray-600 text-lg leading-relaxed mb-6 max-w-2xl mx-auto">
-                    Veja onde {currentUsername} está agora, e os últimos
-                    locais por onde passou.
-                  </p>
-                  <div className="flex justify-center">
-                    <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-gray-200 w-full max-w-sm">
-                      {/* Mapa construído em CSS, réplica do app de localização real */}
+                {EVIDENCE_BLOCKS.map((block, index) => {
+                  const Icon = block.icon;
+                  const h = block.headline(currentUsername);
+                  return (
+                    <motion.div
+                      key={block.tag}
+                      variants={scaleIn}
+                      custom={index}
+                      initial="hidden"
+                      animate="visible"
+                      className="rounded-3xl overflow-hidden shadow-2xl"
+                      style={{
+                        backgroundColor: "#0B141A",
+                        border: "1px solid rgba(37,211,102,0.18)",
+                      }}
+                    >
+                      {/* Etiqueta da categoria */}
                       <div
-                        className="relative w-full overflow-hidden"
+                        className="flex items-center gap-2 px-5 py-3"
                         style={{
-                          aspectRatio: "4 / 3",
-                          backgroundColor: "#E8EAED",
-                          backgroundImage:
-                            "repeating-linear-gradient(0deg, transparent, transparent 34px, rgba(255,255,255,0.95) 34px, rgba(255,255,255,0.95) 37px), repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(255,255,255,0.95) 50px, rgba(255,255,255,0.95) 53px)",
+                          backgroundColor: "rgba(37,211,102,0.10)",
+                          borderBottom: "1px solid rgba(37,211,102,0.14)",
                         }}
                       >
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          {/* Pulso de localização ao vivo */}
-                          <motion.span
-                            animate={{ scale: [1, 2], opacity: [0.35, 0] }}
-                            transition={{
-                              duration: 2,
-                              repeat: Infinity,
-                              ease: "easeOut",
-                            }}
-                            className="absolute w-14 h-14 rounded-full"
-                            style={{ backgroundColor: primaryColor }}
-                          />
-                          {/* Pin com o mesmo avatar padrão dos outros passos */}
-                          <div className="relative z-10 flex flex-col items-center">
-                            <div
-                              className="relative w-14 h-14 rounded-full overflow-hidden"
-                              style={{
-                                backgroundColor: `${primaryColor}20`,
-                                border: "3px solid white",
-                                boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-                              }}
-                            >
-                              <div
-                                className="absolute rounded-full"
-                                style={{
-                                  width: "38%",
-                                  height: "38%",
-                                  top: "16%",
-                                  left: "31%",
-                                  backgroundColor: primaryColor,
-                                  opacity: 0.5,
-                                }}
-                              />
-                              <div
-                                className="absolute rounded-full"
-                                style={{
-                                  width: "78%",
-                                  height: "78%",
-                                  bottom: "-30%",
-                                  left: "11%",
-                                  backgroundColor: primaryColor,
-                                  opacity: 0.5,
-                                }}
-                              />
-                            </div>
-                            <div
-                              style={{
-                                width: 0,
-                                height: 0,
-                                borderLeft: "7px solid transparent",
-                                borderRight: "7px solid transparent",
-                                borderTop: "9px solid white",
-                                marginTop: "-2px",
-                                filter:
-                                  "drop-shadow(0 2px 1px rgba(0,0,0,0.2))",
-                              }}
+                        <Icon
+                          className="w-4 h-4 flex-shrink-0"
+                          style={{ color: "#25D366" }}
+                        />
+                        <span
+                          className="text-[11px] font-bold uppercase tracking-wider"
+                          style={{ color: "#25D366" }}
+                        >
+                          {block.tag}
+                        </span>
+                      </div>
+
+                      <div className="px-5 pt-5 pb-4 text-left">
+                        <h3 className="text-[19px] sm:text-xl font-bold text-white leading-snug mb-2">
+                          {h.before ? `${h.before} ` : ""}
+                          <span style={{ color: "#25D366" }}>{h.target}</span>
+                          {h.after ? ` ${h.after}` : ""}
+                        </h3>
+                        <p
+                          className="text-[13.5px] leading-relaxed"
+                          style={{ color: "#8696A0" }}
+                        >
+                          {block.body(currentUsername)}
+                        </p>
+                      </div>
+
+                      {/* A prova em si */}
+                      <div className="px-3">
+                        <div
+                          className="relative rounded-2xl overflow-hidden select-none"
+                          style={{
+                            backgroundColor: "#111B21",
+                            border: "1px solid rgba(255,255,255,0.06)",
+                          }}
+                        >
+                          {block.mock === "chat" && (
+                            <MockChat alvo={currentUsername} />
+                          )}
+                          {block.mock === "gallery" && (
+                            <MockGallery alvo={currentUsername} />
+                          )}
+                          {block.mock === "map" && (
+                            <MockMap
+                              alvo={currentUsername}
+                              place={leadPlace}
+                              coords={leadCoords}
                             />
-                          </div>
+                          )}
+                          {block.mock === "audio" && (
+                            <MockAudio alvo={currentUsername} />
+                          )}
                         </div>
                       </div>
-                      <div className="p-4 text-left" style={{ backgroundColor: "#1F2937" }}>
-                        <p className="text-white font-semibold">
-                          Localização Atual
-                        </p>
-                        <p className="text-gray-400 text-sm mb-3">
-                          {currentUsername}
-                        </p>
-                        <button
-                          type="button"
-                          className="w-full py-2.5 rounded-lg text-white text-sm font-medium transition-colors hover:brightness-110"
-                          style={{ backgroundColor: "#374151" }}
+
+                      {/* Selo de bloqueio ao pé do dossiê */}
+                      <div className="flex items-center justify-center gap-2 px-5 py-4">
+                        <Lock
+                          className="w-3.5 h-3.5 flex-shrink-0"
+                          style={{ color: "#8696A0" }}
+                        />
+                        <span
+                          className="text-xs font-semibold"
+                          style={{ color: "#8696A0" }}
                         >
-                          Ver
-                        </button>
+                          {block.lockLabel}
+                        </span>
                       </div>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Keylogger Ativo */}
-                <motion.div
-                  variants={scaleIn}
-                  custom={1}
-                  initial="hidden"
-                  animate="visible"
-                  className="text-center space-y-6"
-                >
-                  <div className="text-center mb-4">
-                    <ShieldCheck
-                      className="w-12 h-12 mx-auto mb-3"
-                      style={{ color: primaryColor }}
-                    />
-                    <h3 className="text-2xl font-semibold text-gray-900">
-                      Keylogger Ativo
-                    </h3>
-                  </div>
-                  <p className="text-gray-600 text-lg leading-relaxed mb-6 max-w-2xl mx-auto">
-                    Veja tudo que {currentUsername} digita: mensagens, senhas,
-                    pesquisas... até o que ele começou a escrever e depois
-                    parou.
-                  </p>
-                  <div className="flex justify-center">
-                    <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-gray-200">
-                      <video
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        disablePictureInPicture
-                        controlsList="nodownload nofullscreen noremoteplayback"
-                        className="w-96 h-96 object-cover pointer-events-none"
-                        style={{ pointerEvents: "none" }}
-                      >
-                        <source src="/Gif/teclas.mp4" type="video/mp4" />
-                      </video>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Escuta Ambiente */}
-                <motion.div
-                  variants={scaleIn}
-                  custom={2}
-                  initial="hidden"
-                  animate="visible"
-                  className="text-center space-y-6"
-                >
-                  <div className="text-center mb-4">
-                    <MessageCircle
-                      className="w-12 h-12 mx-auto mb-3"
-                      style={{ color: primaryColor }}
-                    />
-                    <h3 className="text-2xl font-semibold text-gray-900">
-                      Escuta Ambiente
-                    </h3>
-                  </div>
-                  <p className="text-gray-600 text-lg leading-relaxed mb-6 max-w-2xl mx-auto">
-                    Ative o microfone do celular dele e escute o que @
-                    {currentUsername} ouve.
-                  </p>
-                  <div className="flex justify-center">
-                    <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-gray-200">
-                      <video
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        disablePictureInPicture
-                        controlsList="nodownload nofullscreen noremoteplayback"
-                        className="w-96 h-96 object-cover pointer-events-none"
-                        style={{ pointerEvents: "none" }}
-                      >
-                        <source src="/Gif/audio.mp4" type="video/mp4" />
-                      </video>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Painel de Controle do Dispositivo */}
-                <motion.div
-                  variants={scaleIn}
-                  custom={3}
-                  initial="hidden"
-                  animate="visible"
-                  className="text-center space-y-6"
-                >
-                  <div className="text-center mb-4">
-                    <Lock
-                      className="w-12 h-12 mx-auto mb-3"
-                      style={{ color: primaryColor }}
-                    />
-                    <h3 className="text-2xl font-semibold text-gray-900">
-                      Painel de Controle do Dispositivo
-                    </h3>
-                  </div>
-                  <p className="text-gray-600 text-lg leading-relaxed mb-6 max-w-2xl mx-auto">
-                    Tenha acesso total ao WhatsApp de {currentUsername}.
-                    Conversas, chamadas, arquivos, histórico.
-                  </p>
-                  <div className="flex justify-center">
-                    <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-gray-200">
-                      <video
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        disablePictureInPicture
-                        controlsList="nodownload nofullscreen noremoteplayback"
-                        className="w-96 h-96 object-cover pointer-events-none"
-                        style={{ pointerEvents: "none" }}
-                      >
-                        <source src="/Gif/dispositivo.mp4" type="video/mp4" />
-                      </video>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Galeria Oculta e Arquivos Apagados */}
-                <motion.div
-                  variants={scaleIn}
-                  custom={4}
-                  initial="hidden"
-                  animate="visible"
-                  className="text-center space-y-6"
-                >
-                  <div className="text-center mb-4">
-                    <Eye
-                      className="w-12 h-12 mx-auto mb-3"
-                      style={{ color: primaryColor }}
-                    />
-                    <h3 className="text-2xl font-semibold text-gray-900">
-                      Galeria Oculta e Arquivos Apagados
-                    </h3>
-                  </div>
-                  <p className="text-gray-600 text-lg leading-relaxed mb-6 max-w-2xl mx-auto">
-                    Fotos, prints, mídias salvas ou apagadas. Nada fica
-                    escondido.
-                  </p>
-                  <div className="flex justify-center">
-                    <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-gray-200">
-                      <video
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        disablePictureInPicture
-                        controlsList="nodownload nofullscreen noremoteplayback"
-                        className="w-96 h-96 object-cover pointer-events-none"
-                        style={{ pointerEvents: "none" }}
-                      >
-                        <source src="/Gif/galeria.mp4" type="video/mp4" />
-                      </video>
-                    </div>
-                  </div>
-                </motion.div>
+                    </motion.div>
+                  );
+                })}
               </div>
             </motion.section>
 
@@ -2281,218 +2724,531 @@ export default function PitchPage({
             </motion.section>
 
             <motion.section
-              style={
-                pathname == "/" || pathname == "/01" || pathname == "/roc"
-                  ? {}
-                  : { display: "none" }
-              }
               variants={scaleIn}
               custom={0}
               initial="hidden"
               animate="visible"
-              className="bg-red-50 rounded-xl shadow-lg p-6 md:p-8 border border-red-200"
+              className="rounded-3xl overflow-hidden shadow-2xl"
+              style={{
+                backgroundColor: "#0B141A",
+                border: "1px solid rgba(245,158,11,0.3)",
+                display:
+                  pathname == "/" || pathname == "/01" || pathname == "/roc"
+                    ? undefined
+                    : "none",
+              }}
             >
-              <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6 max-w-3xl mx-auto">
-                <motion.div
-                  whileHover={{ scale: 1.1, rotate: 5 }}
-                  transition={{ duration: 0.2 }}
+              <div
+                className="flex items-center gap-2 px-5 py-3"
+                style={{
+                  backgroundColor: "rgba(245,158,11,0.10)",
+                  borderBottom: "1px solid rgba(245,158,11,0.16)",
+                }}
+              >
+                <TriangleAlert
+                  className="w-4 h-4 flex-shrink-0"
+                  style={{ color: "#F59E0B" }}
+                />
+                <span
+                  className="text-[11px] font-bold uppercase tracking-wider"
+                  style={{ color: "#F59E0B" }}
                 >
-                  <TriangleAlert className="w-16 h-16 md:w-12 md:h-12 text-red-500 flex-shrink-0" />
-                </motion.div>
-                <div className="text-center md:text-left">
-                  <motion.h2
-                    variants={fadeInUp}
-                    custom={1}
-                    className="text-xl sm:text-2xl font-bold mb-2 text-red-700"
-                  >
-                    Atenção: Use com Discernimento
-                  </motion.h2>
-                  <motion.p
-                    variants={fadeInUp}
-                    custom={2}
-                    className="leading-relaxed text-red-600"
-                  >
-                    As informações reveladas podem ser{" "}
-                    <span className="font-semibold">
-                      intensas e transformadoras
-                    </span>
-                    . Esta ferramenta expõe a verdade nua e crua. Prossiga com
-                    responsabilidade e prepare-se para o que você pode
-                    descobrir.
-                  </motion.p>
-                </div>
+                  Antes de continuar
+                </span>
+              </div>
+              <div className="px-5 py-5">
+                <motion.h2
+                  variants={fadeInUp}
+                  custom={1}
+                  className="text-[19px] sm:text-xl font-bold text-white leading-snug mb-2"
+                >
+                  Prepare-se para o que vai encontrar
+                </motion.h2>
+                <motion.p
+                  variants={fadeInUp}
+                  custom={2}
+                  className="text-[13.5px] leading-relaxed"
+                  style={{ color: "#8696A0" }}
+                >
+                  O que está guardado nesse backup pode ser{" "}
+                  <span className="font-bold text-white">
+                    difícil de ver
+                  </span>
+                  . Só prossiga se estiver pronto para saber a verdade — sem
+                  filtro e sem volta.
+                </motion.p>
               </div>
             </motion.section>
 
-            {/* Lista de Recursos Inclusos (bônus além dos blocos acima) */}
+            {/* Tudo que vem junto. Grade fixa em vez de pílulas soltas: com
+                larguras variáveis e centralizadas, a lista ziguezagueava. */}
             <motion.section
               variants={staggerContainer}
               initial="hidden"
               animate="visible"
-              className="bg-gray-50 rounded-xl shadow-lg p-6 md:p-8 border border-gray-200"
+              className="rounded-3xl overflow-hidden shadow-2xl"
+              style={{
+                backgroundColor: "#0B141A",
+                border: "1px solid rgba(37,211,102,0.18)",
+              }}
             >
-              <div className="max-w-2xl mx-auto">
+              <div
+                className="flex items-center gap-2 px-5 py-3"
+                style={{
+                  backgroundColor: "rgba(37,211,102,0.10)",
+                  borderBottom: "1px solid rgba(37,211,102,0.14)",
+                }}
+              >
+                <Sparkles
+                  className="w-4 h-4 flex-shrink-0"
+                  style={{ color: "#25D366" }}
+                />
+                <span
+                  className="text-[11px] font-bold uppercase tracking-wider"
+                  style={{ color: "#25D366" }}
+                >
+                  Incluso no acesso
+                </span>
+              </div>
+
+              <div className="px-5 pt-5 pb-5">
                 <motion.h2
                   variants={fadeInUp}
-                  className="text-xl sm:text-2xl font-bold text-center text-gray-800 mb-6"
+                  className="text-[19px] sm:text-xl font-bold text-white leading-snug mb-1"
                 >
-                  E Você Também Vai Ter Acesso a:
+                  Tudo isso vem junto
                 </motion.h2>
-                <div className="flex flex-wrap justify-center gap-2.5">
+                <p
+                  className="text-[13px] leading-relaxed mb-5"
+                  style={{ color: "#8696A0" }}
+                >
+                  Liberado na mesma conta, sem custo extra.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2.5">
                   {[
-                    "Histórico de Localização",
-                    "Mensagens Apagadas",
-                    "Foto Remota do Dispositivo",
-                    "Sites Visitados",
-                    "Pesquisas Feitas",
-                    "Contatos Salvos",
-                    "Chamadas Recebidas e Feitas",
-                    "Invisibilidade Total",
-                    "Controle Remoto Completo",
-                  ].map((item, index) => (
-                    <motion.div
-                      key={index}
-                      variants={slideInRight}
-                      custom={index}
-                      whileHover={{ scale: 1.04 }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white rounded-full border border-gray-200 shadow-sm"
-                    >
-                      <BadgeCheck className="w-3.5 h-3.5 flex-shrink-0 text-green-500" />
-                      <span className="text-gray-700 text-xs sm:text-sm whitespace-nowrap">
-                        {item}
-                      </span>
-                    </motion.div>
-                  ))}
+                    { icon: MapPin, label: "Histórico de localização" },
+                    { icon: Trash2, label: "Mensagens apagadas" },
+                    { icon: ImageIcon, label: "Fotos e vídeos" },
+                    { icon: Volume2, label: "Áudios e gravações" },
+                    { icon: Phone, label: "Registro de ligações" },
+                    { icon: Users, label: "Lista de contatos" },
+                    { icon: Eye, label: "Status e visualizações" },
+                    { icon: Clock, label: "Atualizações ao vivo" },
+                  ].map((item, index) => {
+                    const Icon = item.icon;
+                    return (
+                      <motion.div
+                        key={item.label}
+                        variants={fadeInUp}
+                        custom={index}
+                        className="flex items-center gap-2.5 rounded-xl px-3 py-2.5"
+                        style={{
+                          backgroundColor: "#111B21",
+                          border: "1px solid rgba(255,255,255,0.05)",
+                        }}
+                      >
+                        <Icon
+                          className="w-4 h-4 flex-shrink-0"
+                          style={{ color: "#25D366" }}
+                        />
+                        <span className="text-[12px] font-medium text-white leading-tight">
+                          {item.label}
+                        </span>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+
+                {/* Fecho de confiança, largura inteira */}
+                <div
+                  className="flex items-center justify-center gap-2 mt-2.5 rounded-xl px-3 py-3"
+                  style={{ backgroundColor: "rgba(37,211,102,0.08)" }}
+                >
+                  <ShieldCheck
+                    className="w-4 h-4 flex-shrink-0"
+                    style={{ color: "#25D366" }}
+                  />
+                  <span
+                    className="text-[12.5px] font-bold"
+                    style={{ color: "#25D366" }}
+                  >
+                    Acesso 100% anônimo e sem rastro
+                  </span>
                 </div>
               </div>
             </motion.section>
 
-            {/* Seção de Preços e Oferta */}
+            {/* Seção de Garantia & Confiança */}
+            <motion.section
+              variants={fadeInUp}
+              custom={0}
+              initial="hidden"
+              animate="visible"
+              className="rounded-3xl overflow-hidden shadow-2xl"
+              style={{
+                backgroundColor: "#0B141A",
+                border: "1px solid rgba(37,211,102,0.18)",
+              }}
+            >
+              <div
+                className="flex items-center gap-2 px-5 py-3"
+                style={{
+                  backgroundColor: "rgba(37,211,102,0.10)",
+                  borderBottom: "1px solid rgba(37,211,102,0.14)",
+                }}
+              >
+                <ShieldCheck
+                  className="w-4 h-4 flex-shrink-0"
+                  style={{ color: primaryBright }}
+                />
+                <span
+                  className="text-[11px] font-bold uppercase tracking-wider"
+                  style={{ color: primaryBright }}
+                >
+                  Sem risco para você
+                </span>
+              </div>
+
+              <div className="p-5 space-y-2.5">
+                {[
+                  {
+                    icon: CheckCircle2,
+                    title: "Garantia de 7 dias",
+                    body: "Não gostou? Devolvemos o valor. Sem perguntas.",
+                  },
+                  {
+                    icon: Lock,
+                    title: "100% seguro e anônimo",
+                    body: "Dados criptografados. Ninguém sabe que você esteve aqui.",
+                  },
+                  {
+                    icon: Rocket,
+                    title: "Acesso imediato",
+                    body: "Começa em 30 segundos. Sem espera e sem instalar nada.",
+                  },
+                ].map((g) => {
+                  const Icon = g.icon;
+                  return (
+                    <div
+                      key={g.title}
+                      className="flex items-start gap-3 rounded-2xl px-4 py-3.5"
+                      style={{
+                        backgroundColor: "#111B21",
+                        border: "1px solid rgba(255,255,255,0.05)",
+                      }}
+                    >
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: "rgba(37,211,102,0.12)" }}
+                      >
+                        <Icon
+                          className="w-[18px] h-[18px]"
+                          style={{ color: primaryBright }}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-bold text-white leading-snug mb-0.5">
+                          {g.title}
+                        </p>
+                        <p
+                          className="text-[12.5px] leading-snug"
+                          style={{ color: "#8696A0" }}
+                        >
+                          {g.body}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.section>
+
+            {/* Prova social em vídeo, logo antes do preço: é onde a dúvida
+                "isso funciona mesmo?" aparece e precisa de rosto humano. */}
+            <motion.section
+              variants={staggerContainer}
+              initial="hidden"
+              animate="visible"
+              className="rounded-3xl overflow-hidden shadow-2xl"
+              style={{
+                backgroundColor: "#0B141A",
+                border: "1px solid rgba(37,211,102,0.18)",
+              }}
+            >
+              <div
+                className="flex items-center gap-2 px-5 py-3"
+                style={{
+                  backgroundColor: "rgba(37,211,102,0.10)",
+                  borderBottom: "1px solid rgba(37,211,102,0.14)",
+                }}
+              >
+                <Star
+                  className="w-4 h-4 flex-shrink-0"
+                  style={{ color: primaryBright }}
+                  fill={primaryBright}
+                />
+                <span
+                  className="text-[11px] font-bold uppercase tracking-wider"
+                  style={{ color: primaryBright }}
+                >
+                  Quem já descobriu a verdade
+                </span>
+              </div>
+
+              <div className="px-5 pt-5 pb-2">
+                <motion.h2
+                  variants={fadeInUp}
+                  className="text-[19px] sm:text-xl font-bold text-white leading-snug mb-1"
+                >
+                  Eles também tiveram essa dúvida
+                </motion.h2>
+                <p
+                  className="text-[13px] leading-relaxed"
+                  style={{ color: "#8696A0" }}
+                >
+                  Relatos de quem usou e parou de se perguntar.
+                </p>
+              </div>
+
+              {/* rolagem horizontal com encaixe: três vídeos sem empilhar
+                  meia tela de altura no celular */}
+              <div
+                className="flex gap-3 overflow-x-auto px-5 pb-5 pt-3 snap-x snap-mandatory"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {DEPOIMENTOS.map((d) => (
+                  <figure
+                    key={d.arquivo}
+                    className="snap-center flex-shrink-0 w-[208px] rounded-2xl overflow-hidden"
+                    style={{
+                      backgroundColor: "#111B21",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    <video
+                      src={`/depoimentos/${d.arquivo}#t=1.5`}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="w-full bg-black"
+                      style={{ aspectRatio: "1 / 1", objectFit: "cover" }}
+                    />
+                    <figcaption className="px-3 py-2.5">
+                      <div className="flex items-center gap-1 mb-1">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star
+                            key={i}
+                            className="w-3 h-3"
+                            style={{ color: "#F59E0B" }}
+                            fill="#F59E0B"
+                          />
+                        ))}
+                      </div>
+                      <p className="text-[12.5px] font-bold text-white leading-tight">
+                        {d.nome}
+                      </p>
+                      <p
+                        className="text-[11px] leading-snug mt-0.5"
+                        style={{ color: "#8696A0" }}
+                      >
+                        {d.legenda}
+                      </p>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+
+              <div
+                className="flex items-center justify-center gap-1.5 px-5 pb-4"
+                style={{ color: "#8696A0" }}
+              >
+                <BadgeCheck className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="text-[11px]">
+                  Relatos enviados por quem já usou a ferramenta
+                </span>
+              </div>
+            </motion.section>
+
+            {/* Oferta. Antes era um card claro com parágrafo de seis linhas
+                centralizado e o preço quebrando no meio — aqui a hierarquia
+                vai do gancho ao valor sem desvio. */}
             <motion.section
               ref={pricingRef}
               variants={scaleIn}
               custom={0}
               initial="hidden"
               animate="visible"
-              className="relative bg-white rounded-xl shadow-xl p-6 md:p-8 border-2"
-              style={{ borderColor: primaryColor }}
+              className="relative rounded-3xl overflow-hidden shadow-2xl"
+              style={{
+                backgroundColor: "#0B141A",
+                border: `1px solid ${primaryBright}4D`,
+                boxShadow: `0 0 40px ${primaryBright}1A, 0 20px 50px rgba(0,0,0,0.3)`,
+              }}
             >
-              {/* Animated Glow Border */}
-              <div className="absolute inset-0 rounded-xl overflow-hidden">
-                <div
-                  className="absolute inset-0 rounded-xl rotate-glow-animation"
-                  style={{
-                    background: `conic-gradient(from 0deg, transparent 0%, transparent 70%, ${primaryColor}40 85%, ${primaryColor}80 92%, ${primaryColor}40 100%)`,
-                    filter: "blur(3px)",
-                    zIndex: -1,
-                  }}
-                />
-                <div
-                  className="absolute inset-0 rounded-xl rotate-glow-animation-reverse"
-                  style={{
-                    background: `conic-gradient(from 180deg, transparent 0%, transparent 70%, ${primaryColor}60 85%, ${primaryColor}FF 92%, ${primaryColor}60 100%)`,
-                    filter: "blur(2px)",
-                    zIndex: -1,
-                  }}
-                />
+              <div
+                className="flex items-center justify-between gap-2 px-5 py-3"
+                style={{
+                  backgroundColor: "rgba(37,211,102,0.10)",
+                  borderBottom: "1px solid rgba(37,211,102,0.14)",
+                }}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <Sparkles
+                    className="w-4 h-4 flex-shrink-0"
+                    style={{ color: primaryBright }}
+                  />
+                  <span
+                    className="text-[11px] font-bold uppercase tracking-wider truncate"
+                    style={{ color: primaryBright }}
+                  >
+                    Oferta de hoje
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <Clock className="w-3.5 h-3.5" style={{ color: "#F59E0B" }} />
+                  <span
+                    className="text-[12px] font-bold tabular-nums"
+                    style={{ color: "#F59E0B" }}
+                  >
+                    {formatTime(timeLeft)}
+                  </span>
+                </div>
               </div>
 
-              {/* Content */}
-              <div className="relative z-10 max-w-xl mx-auto text-center">
+              <div className="px-5 pt-5 pb-5">
                 <motion.h2
                   variants={fadeInUp}
                   custom={1}
-                  className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2"
+                  className="text-[21px] sm:text-2xl font-bold text-white leading-snug mb-2"
                 >
-                  Sua Chance Única de Resgatar sua Paz de Espírito
+                  A dúvida custa mais caro que a verdade
                 </motion.h2>
                 <motion.p
                   variants={fadeInUp}
                   custom={2}
-                  className="text-gray-600 mb-6"
+                  className="text-[13.5px] leading-relaxed mb-5"
+                  style={{ color: "#8696A0" }}
                 >
-                  A dúvida consome muito mais a sua saúde mental do que a
-                  própria verdade. Continuar ignorando os sinais não vai
-                  fazer o problema sumir. Você merece dormir em paz sabendo
-                  exatamente o que acontece quando você não está por perto.
-                  Nossa tecnologia permite a análise de forma totalmente
-                  oculta: o dono do número{" "}
-                  <span className="font-bold" style={{ color: primaryColor }}>
-                    NUNCA
+                  Ignorar os sinais não faz o problema sumir — só adia. A
+                  análise é totalmente oculta:{" "}
+                  <span className="font-bold" style={{ color: primaryBright }}>
+                    {currentUsername} nunca vai saber
                   </span>{" "}
-                  vai saber que você teve acesso.
+                  que você teve acesso.
                 </motion.p>
-                <motion.div variants={fadeInUp} custom={3} className="mb-6">
-                  <span className="text-lg text-gray-500 block">
-                    Preço original de mercado restrito:
-                  </span>
-                  <motion.span
-                    whileHover={{ scale: 1.05 }}
-                    className="text-3xl font-bold line-through text-red-400"
-                  >
-                    R$ 297,00
-                  </motion.span>
-                </motion.div>
+
+                {/* Preço: âncora pequena em cima, valor grande numa linha só */}
                 <motion.div
                   variants={scaleIn}
-                  custom={4}
-                  className="bg-gray-50 rounded-lg p-6 mb-8"
+                  custom={3}
+                  className="rounded-2xl px-4 py-5 mb-4 text-center"
+                  style={{
+                    backgroundColor: "#111B21",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
                 >
                   <p
-                    className="text-xl font-semibold mb-1"
-                    style={{ color: primaryColor }}
+                    className="text-[12.5px] mb-1"
+                    style={{ color: "#8696A0" }}
                   >
-                    OFERTA EXCLUSIVA DE HOJE:
-                  </p>
-                  <p className="text-5xl sm:text-6xl font-bold mb-1 text-gray-900">
-                    9x de R$ 6<span className="text-3xl align-top">,03</span>
-                  </p>
-                  <p className="text-gray-600">
-                    ou{" "}
-                    <span className="font-semibold text-gray-800">
-                      R$ 67,00
+                    De{" "}
+                    <span className="line-through" style={{ color: "#EF4444" }}>
+                      R$ 297,00
                     </span>{" "}
-                    à vista — Pagamento Único, Acesso Vitalício
+                    por apenas
+                  </p>
+
+                  <p className="flex items-baseline justify-center gap-1 whitespace-nowrap mb-1">
+                    <span className="text-[20px] font-bold text-white">9x</span>
+                    <span
+                      className="text-[19px] font-bold"
+                      style={{ color: primaryBright }}
+                    >
+                      R$
+                    </span>
+                    <span
+                      className="text-[46px] sm:text-[52px] font-bold leading-none"
+                      style={{ color: primaryBright }}
+                    >
+                      6
+                    </span>
+                    <span
+                      className="text-[24px] font-bold"
+                      style={{ color: primaryBright }}
+                    >
+                      ,03
+                    </span>
+                  </p>
+
+                  <p className="text-[13px] text-white">
+                    ou <span className="font-bold">R$ 67,00</span> à vista
+                  </p>
+                  <p className="text-[11.5px] mt-1" style={{ color: "#8696A0" }}>
+                    Pagamento único · Acesso vitalício
                   </p>
                 </motion.div>
-                <motion.button
+
+                {/* CTA. Era um <a> dentro de <button>, HTML inválido — agora
+                    é só o link, estilizado como botão. */}
+                <motion.a
                   variants={scaleIn}
-                  custom={5}
-                  whileHover={{ scale: 1.03 }}
+                  custom={4}
+                  whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  /* onClick={() =>
-                    (window.location.href =
-                      "https://pay.kirvano.com/7f6e133f-4073-4c6c-8790-25b09bcb56ca")
-                  } */
-                  className="relative overflow-hidden w-full font-bold py-4 px-6 rounded-xl text-xl sm:text-2xl transition-all duration-300 shadow-lg hover:shadow-xl mega-pulse-button"
+                  href="https://go.perfectpay.com.br/PPU38CPQDG9"
+                  onClick={() => {
+                    import("react-facebook-pixel")
+                      .then((x) => x.default)
+                      .then((ReactPixel) => {
+                        ReactPixel.track("InitiateCheckout", {
+                          value: "67.00",
+                          currency: "BRL",
+                          content_type: "product",
+                          content_ids: ["relatorio-completo"],
+                        });
+                      });
+                  }}
+                  className="relative overflow-hidden flex items-center justify-center w-full font-bold py-4 px-5 rounded-2xl text-[16px] sm:text-lg text-white text-center shadow-lg mega-pulse-button"
                   style={{
                     background: primaryGradient,
                     backgroundSize: "200% 200%",
-                    color: "white",
-                    boxShadow: `0 0 20px ${primaryBright}40, 0 4px 20px rgba(0, 0, 0, 0.15)`,
+                    boxShadow: `0 0 24px ${primaryBright}4D, 0 6px 20px rgba(0,0,0,0.25)`,
                   }}
                 >
-                  {/* Shine effect */}
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 shine-animation" />
-                  <a
-                    onClick={() => {
-                      import("react-facebook-pixel")
-                        .then((x) => x.default)
-                        .then((ReactPixel) => {
-                          ReactPixel.track("InitiateCheckout", {
-                            value: "67.00",
-                            currency: "BRL",
-                            content_type: "product",
-                            content_ids: ["relatorio-completo"],
-                          });
-                        });
-                    }}
-                    href="https://go.perfectpay.com.br/PPU38CPQDG9"
-                    className="relative z-10 mega-pulse-text"
-                  >
-                    OBTER ACESSO COMPLETO INSTANTANEAMENTE
-                  </a>
-                </motion.button>
+                  <span className="relative z-10 mega-pulse-text">
+                    LIBERAR MEU ACESSO AGORA
+                  </span>
+                </motion.a>
+
+                {/* Selos: tiram a última objeção logo abaixo do botão */}
+                <div className="flex items-center justify-center gap-4 mt-3.5">
+                  {[
+                    { icon: ShieldCheck, label: "Garantia 7 dias" },
+                    { icon: Lock, label: "Compra segura" },
+                    { icon: Rocket, label: "Acesso imediato" },
+                  ].map((s) => {
+                    const Icon = s.icon;
+                    return (
+                      <div
+                        key={s.label}
+                        className="flex items-center gap-1 min-w-0"
+                      >
+                        <Icon
+                          className="w-3.5 h-3.5 flex-shrink-0"
+                          style={{ color: "#8696A0" }}
+                        />
+                        <span
+                          className="text-[10.5px] font-medium whitespace-nowrap"
+                          style={{ color: "#8696A0" }}
+                        >
+                          {s.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </motion.section>
 
@@ -2501,34 +3257,54 @@ export default function PitchPage({
               variants={staggerContainer}
               initial="hidden"
               animate="visible"
-              className="bg-gray-50 rounded-xl shadow-lg p-6 md:p-8"
+              className="rounded-3xl overflow-hidden shadow-2xl"
+              style={{
+                backgroundColor: "#0B141A",
+                border: "1px solid rgba(37,211,102,0.18)",
+              }}
             >
-              <div className="max-w-2xl mx-auto">
-                <motion.h2
-                  variants={fadeInUp}
-                  className="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-8"
+              <div
+                className="flex items-center gap-2 px-5 py-3"
+                style={{
+                  backgroundColor: "rgba(37,211,102,0.10)",
+                  borderBottom: "1px solid rgba(37,211,102,0.14)",
+                }}
+              >
+                <Gift
+                  className="w-4 h-4 flex-shrink-0"
+                  style={{ color: primaryBright }}
+                />
+                <span
+                  className="text-[11px] font-bold uppercase tracking-wider"
+                  style={{ color: primaryBright }}
                 >
-                  Ao Desbloquear Você Recebe:
-                </motion.h2>
-                <ul className="space-y-4">
+                  Ao desbloquear você recebe
+                </span>
+              </div>
+
+              <div className="p-5">
+                <ul className="space-y-2.5">
                   {includedItems.map((item, index) => (
                     <motion.li
                       key={index}
-                      variants={slideInRight}
+                      variants={fadeInUp}
                       custom={index}
-                      whileHover={{ x: 5, scale: 1.01 }}
-                      className="flex items-start space-x-3 p-4 bg-white rounded-lg border border-gray-200 shadow-sm"
+                      className="flex items-start gap-3 rounded-2xl px-4 py-3.5"
+                      style={{
+                        backgroundColor: "#111B21",
+                        border: "1px solid rgba(255,255,255,0.05)",
+                      }}
                     >
-                      <motion.div
-                        whileHover={{ scale: 1.2, rotate: 10 }}
-                        transition={{ duration: 0.2 }}
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: "rgba(37,211,102,0.12)" }}
                       >
                         <item.icon
-                          className="w-7 h-7 flex-shrink-0 mt-0.5"
-                          style={{ color: primaryColor }}
+                          className="w-[18px] h-[18px]"
+                          style={{ color: primaryBright }}
                         />
-                      </motion.div>
-                      <span className="text-gray-700 leading-relaxed">
+                      </div>
+                      <span className="text-[13px] text-white leading-relaxed pt-1">
                         {item.text}
                       </span>
                     </motion.li>
@@ -2543,16 +3319,31 @@ export default function PitchPage({
               custom={0}
               initial="hidden"
               animate="visible"
-              className="bg-white rounded-xl shadow-lg p-6 md:p-8 border border-gray-100"
+              className="rounded-3xl overflow-hidden shadow-2xl"
+              style={{
+                backgroundColor: "#0B141A",
+                border: "1px solid rgba(37,211,102,0.18)",
+              }}
             >
-              <motion.h2
-                variants={fadeInUp}
-                custom={1}
-                className="text-2xl sm:text-3xl font-semibold text-center text-gray-800 mb-10"
+              <div
+                className="flex items-center gap-2 px-5 py-3"
+                style={{
+                  backgroundColor: "rgba(37,211,102,0.10)",
+                  borderBottom: "1px solid rgba(37,211,102,0.14)",
+                }}
               >
-                Perguntas Frequentes
-              </motion.h2>
-              <div className="max-w-2xl mx-auto">
+                <HelpCircle
+                  className="w-4 h-4 flex-shrink-0"
+                  style={{ color: primaryBright }}
+                />
+                <span
+                  className="text-[11px] font-bold uppercase tracking-wider"
+                  style={{ color: primaryBright }}
+                >
+                  Perguntas frequentes
+                </span>
+              </div>
+              <div className="p-5 space-y-2.5">
                 {faqs.map((faq, index) => (
                   <AccordionItem faq={faq} key={index} index={index} />
                 ))}
@@ -2564,11 +3355,76 @@ export default function PitchPage({
           </main>
         </motion.div>
       )}
+      </AnimatePresence>
+
+      {/* Achados da análise — ancorados no rodapé para nunca cobrir a VSL.
+          O wrapper fixo centraliza; a animação fica no filho, senão o
+          transform do framer-motion anula o -translate-x-1/2 do Tailwind. */}
+      <div
+        className="fixed inset-x-0 z-40 px-3 flex justify-center pointer-events-none"
+        style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+      >
+        <AnimatePresence mode="wait">
+          {activeFinding !== null && (
+            <motion.div
+              key={activeFinding}
+              initial={{ y: 70, opacity: 0, scale: 0.96 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 30, opacity: 0, scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              className="w-full max-w-[420px]"
+            >
+            {(() => {
+              const f = ANALYSIS_FINDINGS[activeFinding];
+              const Icon = f.icon;
+              return (
+                <div
+                  className="bg-white rounded-2xl shadow-2xl border border-gray-100 px-4 py-3 flex items-center gap-3"
+                  style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.16)" }}
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: f.bg }}
+                  >
+                    <Icon className="w-5 h-5" style={{ color: f.color }} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13.5px] font-bold text-gray-900 leading-snug">
+                      {f.title(currentUsername)}
+                    </p>
+                    <p className="text-[11.5px] text-gray-500 leading-snug mt-0.5">
+                      {f.detail}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1 flex-shrink-0 self-start mt-0.5">
+                    <motion.span
+                      animate={{ opacity: [1, 0.3, 1] }}
+                      transition={{ duration: 1.4, repeat: Infinity }}
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: f.color }}
+                    />
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wide"
+                      style={{ color: f.color }}
+                    >
+                      agora
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+          </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Botão flutuante de desbloqueio — some ao chegar no bloco de oferta */}
       <AnimatePresence>
         {showFloatingCta && (
           <motion.div
+            key="cta-flutuante"
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
@@ -2721,6 +3577,6 @@ export default function PitchPage({
           }
         }
       `}</style>
-    </AnimatePresence>
+    </>
   );
 }

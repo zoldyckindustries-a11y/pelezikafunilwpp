@@ -12,6 +12,7 @@ import { LocationData } from "../services/locationService";
 interface ProfileConfirmModalProps {
   isOpen: boolean;
   username: string;
+  targetName: string;
   onConfirm: () => void;
   onCancel: () => void;
   profileImageUrl: string | null;
@@ -28,6 +29,7 @@ interface ProfileConfirmModalProps {
 export default function ProfileConfirmModal({
   isOpen,
   username,
+  targetName,
   onConfirm,
   onCancel,
   profileImageUrl,
@@ -64,7 +66,7 @@ export default function ProfileConfirmModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
       {showPitch && (
         <div style={{ overflow: "auto", maxHeight: "100vh" }}>
-          <PitchPage onBack={() => {}} userName={username} hasBack={false} />
+          <PitchPage onBack={() => {}} userName={targetName} hasBack={false} />
         </div>
       )}
 
@@ -165,13 +167,27 @@ export default function ProfileConfirmModal({
               Dispositivo Localizado
             </h3>
             {userLocation ? (
-              <p className="text-lg font-semibold text-gray-800 mb-1 flex items-center justify-center gap-1.5">
-                <MapPin
-                  className="w-4 h-4 flex-shrink-0"
-                  style={{ color: colors.primary }}
-                />
-                {userLocation.city}, {userLocation.state}
-              </p>
+              <div className="mb-2.5">
+                <p className="text-lg font-semibold text-gray-800 mb-1 flex items-center justify-center gap-1.5">
+                  <MapPin
+                    className="w-4 h-4 flex-shrink-0"
+                    style={{ color: colors.primary }}
+                  />
+                  {userLocation.city}, {userLocation.state}
+                </p>
+                <div
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                  style={{ backgroundColor: colors.gray[100] }}
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: colors.primary }}
+                  />
+                  <span className="text-[11px] font-medium text-gray-600">
+                    Localização aproximada pelo IP da operadora
+                  </span>
+                </div>
+              </div>
             ) : isFetchingLocation ? (
               <p className="text-sm text-gray-500 mb-1 flex items-center justify-center gap-1.5">
                 <Loader2
@@ -181,9 +197,12 @@ export default function ProfileConfirmModal({
                 Localizando dispositivo...
               </p>
             ) : null}
-            <p className="text-gray-600">
-              Deseja iniciar a extração de mensagens do número{" "}
-              <span className="font-bold text-gray-900">{username}</span>?
+            <p className="text-gray-600 mb-2">
+              Pronto para descobrir a verdade sobre{" "}
+              <span className="font-bold text-gray-900">{targetName}</span>?
+            </p>
+            <p className="text-xs text-gray-500 italic">
+              Seus dados estão 100% protegidos. {targetName} nunca saberá.
             </p>
             {bio && <p className="text-sm text-gray-700 mt-2 italic">{bio}</p>}
 

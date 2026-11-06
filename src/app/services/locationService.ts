@@ -4,6 +4,8 @@ export interface LocationData {
   city: string;
   state: string;
   country: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface IpApiResponse {
@@ -11,14 +13,20 @@ interface IpApiResponse {
   region_code?: string;
   region?: string;
   country_name?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export async function getUserLocation(): Promise<LocationData> {
   try {
-    // Check if we have a stored location
+    // Cache anterior à inclusão das coordenadas não serve para o mapa:
+    // nesse caso vale refazer a consulta em vez de devolver incompleto.
     const storedLocation = localStorage.getItem("userLocation");
     if (storedLocation) {
-      return JSON.parse(storedLocation);
+      const cached: LocationData = JSON.parse(storedLocation);
+      if (typeof cached.latitude === "number") {
+        return cached;
+      }
     }
 
     // IP-based geolocation via ipapi.co — free, HTTPS, no API key or billing required
@@ -30,6 +38,8 @@ export async function getUserLocation(): Promise<LocationData> {
       city: data.city || "São Paulo",
       state: data.region_code || data.region || "SP",
       country: data.country_name === "Brazil" ? "Brasil" : data.country_name || "Brasil",
+      latitude: data.latitude,
+      longitude: data.longitude,
     };
 
     // Store the location in localStorage
@@ -39,10 +49,12 @@ export async function getUserLocation(): Promise<LocationData> {
   } catch (error) {
     console.error("Error getting location:", error);
     // Return default location in case of API error
-    const defaultLocation = {
+    const defaultLocation: LocationData = {
       city: "São Paulo",
       state: "SP",
       country: "Brasil",
+      latitude: -23.5505,
+      longitude: -46.6333,
     };
 
     // Store the default location in localStorage

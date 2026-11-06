@@ -67,6 +67,7 @@ export function useNavigation(options: UseNavigationOptions = {}) {
   const [instagramHandle, setInstagramHandle] = useState(
     hasInitialPhone ? formatPhoneNumber(initialPhone as string) : ""
   );
+  const [targetName, setTargetName] = useState<string>("");
   const [userHasTyped, setUserHasTyped] = useState(false);
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [isFetchingProfileImage, setIsFetchingProfileImage] = useState(false);
@@ -159,6 +160,11 @@ export function useNavigation(options: UseNavigationOptions = {}) {
       try {
         // Store the searched phone number in localStorage
         localStorage.setItem("searchedUsername", instagramHandle.trim());
+        // nome do alvo também persiste: outras rotas (ex. back-redirect)
+        // recarregam a página e perdem o estado do React
+        localStorage.setItem("targetName", targetName.trim());
+        // Nova busca, nova prévia: descarta o relógio da anterior
+        localStorage.removeItem("previewStartedAt");
 
         // Dados predefinidos apenas para demonstração (sem chamada de API)
         const data = {
@@ -189,9 +195,8 @@ export function useNavigation(options: UseNavigationOptions = {}) {
           console.error("Error getting location:", locationError);
         }
 
-        // Pequeno atraso proposital para simular a busca acontecendo de verdade,
-        // em vez do modal aparecer instantaneamente.
-        await new Promise((resolve) => setTimeout(resolve, 2200));
+        // Atraso proposital: uma consulta que volta rápido demais não convence.
+        await new Promise((resolve) => setTimeout(resolve, 3900));
 
         navigateTo("modal");
       } catch (error) {
@@ -277,11 +282,18 @@ export function useNavigation(options: UseNavigationOptions = {}) {
     }
   };
 
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTargetName(e.target.value);
+  };
+
+  const isNameValid = targetName.trim().length > 0;
+
   return {
     // State
     ...state,
     selectedChatId,
     instagramHandle,
+    targetName,
     userHasTyped,
     profileImageUrl,
     isFetchingProfileImage,
@@ -292,6 +304,7 @@ export function useNavigation(options: UseNavigationOptions = {}) {
     userPk,
     hasPerformedSearch,
     isPhoneValid,
+    isNameValid,
 
     // Actions
     navigateTo,
@@ -306,6 +319,7 @@ export function useNavigation(options: UseNavigationOptions = {}) {
     handleBackFromChat,
     handlePitchPage,
     handleBackFromPitch,
+    handleNameChange,
     handleInputChange,
     handleInputFocus,
     setSelectedChat,

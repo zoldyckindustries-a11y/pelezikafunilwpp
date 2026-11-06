@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, User, ChevronRight, Phone, Video, CheckCheck, Lock } from "lucide-react";
+import { ChevronLeft, User, ChevronRight, Phone, Video, CheckCheck, Lock, MoreVertical } from "lucide-react";
 import { getUserLocation } from "../services/locationService";
+import { CHAT_PREVIEWS, rotuloNaoLidas } from "../data/chatPreviews";
 
 interface ChatIndividualProps {
   chatId: number;
@@ -21,46 +22,12 @@ export default function ChatIndividual({
   const [animateCard, setAnimateCard] = useState(false);
   const [chatName, setChatName] = useState("");
   const [chatAvatar, setChatAvatar] = useState<string | null>(null);
-  const [showTypingIndicator, setShowTypingIndicator] = useState(false);
-  const [showLiveMessage, setShowLiveMessage] = useState(false);
-  const [liveMessageTime, setLiveMessageTime] = useState("");
 
-  // Simula uma mensagem chegando agora: digitando por um tempo, depois a
-  // mensagem aparece com uma animação de entrada, igual ao WhatsApp real.
-  // O horário exibido é sempre o horário real no momento em que a mensagem
-  // "chega", nunca um valor fixo.
-  useEffect(() => {
-    const typingTimeout = setTimeout(() => setShowTypingIndicator(true), 2500);
-    const messageTimeout = setTimeout(() => {
-      setShowTypingIndicator(false);
-      setShowLiveMessage(true);
-      setLiveMessageTime(
-        new Date().toLocaleTimeString("pt-BR", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      );
-    }, 4800);
-    return () => {
-      clearTimeout(typingTimeout);
-      clearTimeout(messageTimeout);
-    };
-  }, []);
 
-  useEffect(() => {
-    if (showTypingIndicator || showLiveMessage) {
-      // A rolagem real acontece na janela (a área de mensagens cresce com o
-      // conteúdo, não é um container com scroll próprio) — por isso rolamos
-      // o documento, não o container. O rAF garante que o novo elemento já
-      // tenha altura final antes de medir o scrollHeight.
-      requestAnimationFrame(() => {
-        window.scrollTo({
-          top: document.documentElement.scrollHeight,
-          behavior: "smooth",
-        });
-      });
-    }
-  }, [showTypingIndicator, showLiveMessage]);
+  // A conversa abre já com a última mensagem lá, ainda não lida — é assim
+  // que o WhatsApp se comporta quando você entra num chat com pendência.
+  // Antes a mensagem "chegava" na frente do lead, o que não combinava com a
+  // lista, que já exibia aquele texto como prévia.
 
   // Get location from localStorage
   useEffect(() => {
@@ -156,7 +123,7 @@ export default function ChatIndividual({
           id: 4,
           type: "blur",
           content:
-            "Mensagem oculta mais longa com conteúdo sensível sobre a Crush 😘",
+            "Relaxa, ela não desconfia de nada. Te espero no mesmo lugar 😘",
           sender: "right",
           time: "14:38",
           showTime: true,
@@ -435,6 +402,22 @@ export default function ChatIndividual({
   };
 
   const currentChat = chatData[chatId as keyof typeof chatData];
+  const previa = CHAT_PREVIEWS[chatId];
+  const divisorRef = useRef<HTMLDivElement>(null);
+
+  // O WhatsApp abre a conversa já no divisor de não lidas. Sem isto o chat
+  // abria no topo e a mensagem nova — a que a lista prometeu — ficava fora
+  // da tela, atrás do card de bloqueio.
+  useEffect(() => {
+    if (!previa || previa.naoLidas === 0) return;
+    const t = setTimeout(() => {
+      const el = divisorRef.current;
+      if (!el) return;
+      const y = el.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top: Math.max(0, y - 150), behavior: "smooth" });
+    }, 450);
+    return () => clearTimeout(t);
+  }, [previa]);
 
   if (!currentChat) {
     return <div>Conversa não encontrada</div>;
@@ -508,7 +491,7 @@ export default function ChatIndividual({
               {/* Balloon of the Message (with play and text "Photo") */}
               <div
                 className={`px-3 py-2 rounded-2xl flex items-center space-x-2 ${
-                  isLeft ? "bg-gray-100" : ""
+                  isLeft ? "bg-white shadow-sm" : ""
                 }`}
                 style={!isLeft ? { backgroundColor: "#D9FDD3" } : {}}
               >
@@ -552,7 +535,7 @@ export default function ChatIndividual({
           ) : (
             <div
               className={`max-w-xs lg:max-w-md px-3 py-2 rounded-2xl ${
-                isLeft ? "bg-gray-100 text-black" : "text-gray-900"
+                isLeft ? "bg-white text-black shadow-sm" : "text-gray-900"
               }`}
               style={!isLeft ? { backgroundColor: "#D9FDD3" } : {}}
             >
@@ -599,7 +582,7 @@ export default function ChatIndividual({
                 <div className="space-y-2">
                   <div
                     className={`flex items-center space-x-2 py-1 px-2 rounded-2xl ${
-                      isLeft ? "bg-gray-100" : ""
+                      isLeft ? "bg-white shadow-sm" : ""
                     }`}
                     style={!isLeft ? { backgroundColor: "#D9FDD3" } : {}}
                   >
@@ -609,8 +592,7 @@ export default function ChatIndividual({
                     >
                       {isLeft ? (
                         <svg
-                          width="auto"
-                          height="40"
+                          className="h-10 w-auto"
                           viewBox="0 0 381 79"
                           fill="none"
                         >
@@ -860,9 +842,7 @@ export default function ChatIndividual({
                         </svg>
                       ) : (
                         <svg
-                          className="audio-waveform-right"
-                          width="auto"
-                          height="40"
+                          className="audio-waveform-right h-10 w-auto"
                           viewBox="0 0 382 79"
                           fill="none"
                         >
@@ -1173,53 +1153,77 @@ export default function ChatIndividual({
         style={{
           touchAction: "manipulation",
           userSelect: "none",
-          backgroundColor: "#ffffff",
+          // papel de parede do WhatsApp claro: o branco liso entrega que
+          // não é o app, é a textura que o olho reconhece primeiro
+          backgroundColor: "#EFE7DE",
+          backgroundImage:
+            "radial-gradient(rgba(0,0,0,0.035) 1px, transparent 1px)",
+          backgroundSize: "20px 20px",
         }}
       >
       {/* Fixed Header */}
       <div
-        className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] z-50 flex items-center justify-between px-4 py-3 shadow-sm"
-        style={{ backgroundColor: "#008069" }}
+        className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] z-50 flex items-center justify-between px-3 py-2.5"
+        style={{
+          backgroundColor: "#FFFFFF",
+          borderBottom: "1px solid #E9EDEF",
+        }}
       >
-        <div className="flex items-center space-x-3">
-          <button onClick={onBack} className="p-1">
-            <ChevronLeft className="w-6 h-6" stroke="#ffffff" strokeWidth={2} />
+        <div className="flex items-center gap-2 min-w-0">
+          <button onClick={onBack} className="p-1 flex-shrink-0">
+            <ChevronLeft className="w-6 h-6" stroke="#54656F" strokeWidth={2} />
           </button>
 
-          <div className="flex items-center space-x-3">
-            <div className="relative">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="relative flex-shrink-0">
               {chatAvatar ? (
                 <Image
                   src={chatAvatar ?? ""}
-                  alt={chatName || currentChat.name}
+                  alt=""
+                  aria-hidden="true"
                   width={40}
                   height={40}
                   className="rounded-full object-cover blur-sm"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white blur-sm">
-                  <User className="w-6 h-6" />
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center blur-sm"
+                  style={{ backgroundColor: "#F4CF8E" }}
+                >
+                  <User className="w-6 h-6" style={{ color: "#8B5E34" }} />
                 </div>
               )}
             </div>
 
-            <div>
-              <h1 className="font-semibold text-base text-white blur-sm select-none">
+            <div className="min-w-0">
+              <h1
+                className="font-semibold text-[16px] blur-sm select-none truncate"
+                style={{ color: "#111B21" }}
+              >
                 {chatName || currentChat.name}
               </h1>
-              <p className="text-xs text-white/80 blur-sm select-none">
+              <p
+                className="text-[12.5px] blur-sm select-none"
+                style={{ color: "#667781" }}
+              >
                 {currentChat.isOnline ? "online" : "offline"}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <button className="p-1">
-            <Phone className="w-5 h-5 text-white" fill="white" />
+        <div className="flex items-center gap-4 flex-shrink-0 pr-1">
+          <button className="p-0.5" aria-label="Chamada de vídeo">
+            <Video className="w-[22px] h-[22px]" style={{ color: "#54656F" }} />
           </button>
-          <button className="p-1">
-            <Video className="w-6 h-6 text-white" fill="white" />
+          <button className="p-0.5" aria-label="Chamada de voz">
+            <Phone className="w-5 h-5" style={{ color: "#54656F" }} />
+          </button>
+          <button className="p-0.5" aria-label="Mais opções">
+            <MoreVertical
+              className="w-5 h-5"
+              style={{ color: "#54656F" }}
+            />
           </button>
         </div>
       </div>
@@ -1239,52 +1243,29 @@ export default function ChatIndividual({
               renderMessage(message, index, currentChat.messages, false) // false = don't show individual time
           )}
 
-          {/* Mensagem chegando agora, em tempo real */}
-          <AnimatePresence>
-            {(showTypingIndicator || showLiveMessage) && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-center my-4"
-              >
-                <span className="text-xs text-gray-400">HOJE</span>
-              </motion.div>
-            )}
+          {/* Divisor de não lidas + a mensagem que a lista anunciou como
+              prévia. Vêm do mesmo objeto, então o que o lead leu na lista é
+              exatamente o que ele encontra ao abrir. */}
+          {previa && previa.naoLidas > 0 && (
+            <>
+              <div ref={divisorRef} className="flex items-center gap-3 px-4 my-4">
+                <span className="flex-1 h-px bg-gray-300/70" />
+                <span
+                  className="text-[10.5px] font-bold tracking-wider px-2.5 py-1 rounded-full bg-white shadow-sm"
+                  style={{ color: "#667781" }}
+                >
+                  {rotuloNaoLidas(previa.naoLidas)}
+                </span>
+                <span className="flex-1 h-px bg-gray-300/70" />
+              </div>
 
-            {showTypingIndicator && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.25 }}
-                className="flex justify-start items-end mb-1 px-4"
-              >
-                <div className="mr-2 w-6 h-6 flex-shrink-0" />
-                <div className="bg-gray-100 rounded-2xl px-4 py-3 flex items-center gap-1">
-                  {[0, 0.15, 0.3].map((delay) => (
-                    <motion.span
-                      key={delay}
-                      className="w-2 h-2 rounded-full bg-gray-400"
-                      animate={{ y: [0, -4, 0] }}
-                      transition={{ duration: 0.6, repeat: Infinity, delay }}
-                    />
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {showLiveMessage && (
-              <motion.div
-                initial={{ opacity: 0, y: 15, scale: 0.92 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ type: "spring", stiffness: 480, damping: 32 }}
-                className="flex justify-start items-end mb-1 px-4"
-              >
-                <div className="mr-2 flex flex-col justify-end">
+              <div className="flex justify-start items-end mb-1 px-4">
+                <div className="mr-2 flex flex-col justify-end flex-shrink-0">
                   {chatAvatar ? (
                     <Image
                       src={chatAvatar}
-                      alt={chatName || currentChat.name}
+                      alt=""
+                      aria-hidden="true"
                       width={24}
                       height={24}
                       className="rounded-full object-cover blur-sm"
@@ -1295,48 +1276,65 @@ export default function ChatIndividual({
                     </div>
                   )}
                 </div>
-                <div className="max-w-xs lg:max-w-md px-3 py-2 rounded-2xl bg-gray-100 text-black">
-                  <p style={{ fontSize: "15px" }}>Foi ótimo te ver hoje.</p>
+                <div className="max-w-xs lg:max-w-md px-3 py-2 rounded-2xl bg-white shadow-sm text-black">
+                  <p style={{ fontSize: "15px" }}>
+                    {previa.ultimaMensagem}
+                    {previa.trechoOculto && (
+                      <span className="blur-sm select-none ml-1">
+                        {previa.trechoOculto}
+                      </span>
+                    )}
+                  </p>
                   <p className="text-right text-[11px] text-gray-400 mt-0.5">
-                    {liveMessageTime}
+                    {previa.horario}
                   </p>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Conversation Card - fixed above the input */}
       <div className="fixed bottom-20 left-1/2 -translate-x-1/2 w-full max-w-[480px] z-40 px-4 mb-2">
+        {/* Mesmo tratamento da faixa da lista: o alerta vem do âmbar, não de
+            um fundo vermelho que briga com o app inteiro */}
         <div
-          className={`rounded-xl p-4 shadow-lg transition-all duration-300 ${
+          className={`rounded-2xl px-4 py-3.5 shadow-xl transition-all duration-300 ${
             animateCard ? "animate-shake" : ""
           }`}
           style={{
-            background: "linear-gradient(135deg, #DC2626 0%, #EF4444 100%)",
+            background: "linear-gradient(135deg, #054C40 0%, #075E54 100%)",
+            border: "1px solid rgba(245,158,11,0.3)",
           }}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                <Lock className="w-4 h-4 text-white" strokeWidth={2.5} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-white text-sm font-semibold mb-0.5">
-                  Obtenha a ferramenta completa
-                </p>
-                <p className="text-white/80 text-xs">
-                  Você está vendo apenas 10% do que ela é capaz de fazer
-                </p>
-              </div>
+          <div className="flex items-center gap-3">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: "rgba(245,158,11,0.16)" }}
+            >
+              <Lock
+                className="w-4 h-4"
+                style={{ color: "#F59E0B" }}
+                strokeWidth={2.5}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-white text-[13.5px] font-bold leading-snug mb-0.5">
+                Esta conversa está incompleta
+              </p>
+              <p className="text-white/70 text-[11.5px] leading-snug">
+                Áudios, fotos e mensagens apagadas seguem bloqueados.
+              </p>
             </div>
             <button
               onClick={onPitch}
-              className="bg-white/20 hover:bg-white/30 rounded-full p-2 ml-3 transition-colors flex-shrink-0"
-              aria-label="Ver mais"
+              className="flex items-center gap-0.5 flex-shrink-0 pl-3 pr-2 py-2 rounded-full text-[12.5px] font-bold active:scale-[0.97] transition-all"
+              style={{ backgroundColor: "#25D366", color: "#06302B" }}
+              aria-label="Liberar acesso completo"
             >
-              <ChevronRight className="w-5 h-5 text-white" />
+              <span>Liberar</span>
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

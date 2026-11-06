@@ -84,6 +84,7 @@ export default function RocPage(props: HomeProps) {
       <ProfileConfirmModal
         isOpen={navigation.showModal}
         username={navigation.instagramHandle}
+        targetName={navigation.targetName}
         onConfirm={navigation.handleModalConfirm}
         onCancel={navigation.handleModalCancel}
         profileImageUrl={navigation.profileImageUrl}
