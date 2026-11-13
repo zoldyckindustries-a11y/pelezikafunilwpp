@@ -9,7 +9,6 @@ import ChatIndividual from "./components/ChatIndividual";
 import PitchPage from "./components/PitchPage";
 import { useNavigation } from "../hooks/useNavigation";
 import { useCounter } from "../hooks/useCounter";
-import { useBackRedirect } from "../hooks/useBackRedirect";
 import { colors, glassmorphism } from "../constants/theme";
 import { ReactElement, useRef, useState } from "react";
 import {
@@ -44,8 +43,6 @@ export default function Home(props: HomeProps) {
     skipIntro: props.skipIntro,
   });
   const counter = useCounter({ autoStart: !navigation.showIntro });
-  // botão voltar cai na oferta de retorno em vez de sair do funil
-  useBackRedirect();
   // Sem isto o campo não responde ao toque: a borda só reagia quando já
   // havia conteúdo, então focar não dava retorno nenhum.
   const [focusedField, setFocusedField] = useState<"name" | "phone" | null>(
@@ -90,6 +87,7 @@ export default function Home(props: HomeProps) {
         username={navigation.instagramHandle}
         onBack={navigation.handleBackFromDirect}
         onChatSelect={navigation.handleChatSelect}
+        onPitch={navigation.handlePitchPage}
       />
     );
   }

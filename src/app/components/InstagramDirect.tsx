@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import ChatIndividual from "./ChatIndividual";
-import PitchPage from "./PitchPage";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lock,
@@ -24,6 +22,7 @@ import {
 } from "lucide-react";
 import { colors } from "../../constants/theme";
 import { CHAT_PREVIEWS } from "../data/chatPreviews";
+import { garantirPerfisDemo } from "../data/demoProfiles";
 
 // Tempo de prévia antes do paywall. Longo o bastante para a pessoa ver a
 // mensagem nova chegar e tentar abrir algumas conversas.
@@ -125,6 +124,9 @@ interface InstagramDirectProps {
   username: string;
   onBack?: () => void;
   onChatSelect?: (chatId: number) => void;
+  // A oferta é do pai: aqui só avisamos que ela deve abrir. O dono da
+  // navegação é o hook, que registra a etapa na URL.
+  onPitch?: (chatId?: number) => void;
 }
 
 interface Conversation {
@@ -160,11 +162,8 @@ export default function InstagramDirect({
   username,
   onBack,
   onChatSelect,
+  onPitch,
 }: InstagramDirectProps) {
-  const [selectedChat, setSelectedChat] = useState<number | null>(null);
-  const [currentView, setCurrentView] = useState<"list" | "chat" | "pitch">(
-    "list"
-  );
   const [showBlockedToast, setShowBlockedToast] = useState(false);
   const [blockedChatIdForPitch, setBlockedChatIdForPitch] = useState<
     number | null
@@ -190,6 +189,10 @@ export default function InstagramDirect({
   const scrollOfferDismissed = useRef(false);
 
   useEffect(() => {
+    // A lista precisa existir mesmo quando a tela é aberta direto pela URL
+    // (?etapa=direct), sem passar pela etapa de análise.
+    garantirPerfisDemo();
+
     const storedFollowers = localStorage.getItem("followers");
     const storedUnlockedConversations = localStorage.getItem(
       "unlockedConversations"
@@ -262,7 +265,6 @@ export default function InstagramDirect({
   // relógio. Em telas altas a âncora já nasce visível, por isso o convite
   // só é armado depois de um tempo mínimo de leitura.
   useEffect(() => {
-    if (currentView !== "list") return;
     if (showNextStepModal || showScrollOffer || scrollOfferDismissed.current) {
       return;
     }
@@ -283,7 +285,7 @@ export default function InstagramDirect({
     );
     obs.observe(alvo);
     return () => obs.disconnect();
-  }, [currentView, showNextStepModal, showScrollOffer, previewSecondsLeft]);
+  }, [showNextStepModal, showScrollOffer, previewSecondsLeft]);
 
   // Transform profiles into conversations format
   const conversations: Conversation[] = Array.from({ length: 8 }).map(
@@ -352,13 +354,16 @@ export default function InstagramDirect({
     }
   );
 
+  const blurStartIndex = conversations.findIndex(
+    (conversation) => conversation.name === "Ana Costa"
+  );
+
   const handleChatSelectInternal = (chat: Conversation) => {
     if (chat.status === "unlocked") {
-      setSelectedChat(chat.id);
-      setCurrentView("chat");
       // Store chat information in localStorage
       localStorage.setItem("selectedChatName", chat.name);
       localStorage.setItem("selectedChatAvatar", chat.avatar || "");
+      // Quem abre a conversa é o pai: é ele quem registra a etapa na URL.
       if (onChatSelect) {
         onChatSelect(chat.id);
       }
@@ -388,89 +393,26 @@ export default function InstagramDirect({
     }, 3000);
   };
 
-  const handleBackToList = () => {
-    setSelectedChat(null);
-    setBlockedChatIdForPitch(null);
-    setCurrentView("list");
-  };
-
-  const handlePitch = () => {
-    const searchedUsername = localStorage.getItem("searchedUsername");
-    if (searchedUsername) {
-      localStorage.setItem("pitchUsername", searchedUsername);
-      // Atualiza o username no estado global
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("updatePitchUsername", {
-            detail: { username: searchedUsername },
-          })
-        );
-      }
-    }
-    setCurrentView("pitch");
+  // A oferta é aberta pelo pai (que registra a etapa na URL). Quando a oferta
+  // vem de uma conversa bloqueada, ela não tem chat de origem para o
+  // "voltar" — só a lista.
+  const origemDaOferta = () => {
+    const id = blockedChatIdForPitch;
+    return id && id <= 4 ? id : undefined;
   };
 
   // Saída única da prévia para o paywall, usada pelo banner e pelo modal.
   const goToPaywall = () => {
     setShowNextStepModal(false);
     setShowBlockedToast(false);
-    setBlockedChatIdForPitch(999);
-    setSelectedChat(999);
-    handlePitch();
+    setBlockedChatIdForPitch(null);
+    if (onPitch) onPitch();
   };
 
   const navigateToPitchFromToast = () => {
-    if (blockedChatIdForPitch) {
-      setSelectedChat(blockedChatIdForPitch);
-      handlePitch();
-      setShowBlockedToast(false);
-    } else {
-      setShowBlockedToast(false);
-    }
+    setShowBlockedToast(false);
+    if (onPitch) onPitch(origemDaOferta());
   };
-
-  const handleBackFromPitch = () => {
-    const chatIsUnlocked = conversations.find(
-      (c) => c.id === selectedChat && c.status === "unlocked"
-    );
-    if (chatIsUnlocked) {
-      setCurrentView("chat");
-    } else {
-      setCurrentView("list");
-      setSelectedChat(null);
-      setBlockedChatIdForPitch(null);
-    }
-  };
-
-  if (currentView === "chat" && selectedChat) {
-    const chatIsUnlocked =
-      conversations.find((c) => c.id === selectedChat)?.status === "unlocked";
-    if (!chatIsUnlocked) {
-      setCurrentView("list");
-      setSelectedChat(null);
-      return null;
-    }
-    return (
-      <ChatIndividual
-        chatId={selectedChat}
-        onBack={handleBackToList}
-        onPitch={handlePitch}
-      />
-    );
-  }
-
-  if (currentView === "pitch" && selectedChat) {
-    const pitchUsername =
-      typeof window !== "undefined"
-        ? localStorage.getItem("pitchUsername")
-        : null;
-    return (
-      <PitchPage
-        onBack={handleBackFromPitch}
-        userName={pitchUsername || "usuário"}
-      />
-    );
-  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#D9DBD5" }}>
@@ -600,20 +542,7 @@ export default function InstagramDirect({
           <div className="flex justify-end">
             <button
               onClick={() => {
-                const searchedUsername =
-                  localStorage.getItem("searchedUsername");
-                if (searchedUsername) {
-                  localStorage.setItem("pitchUsername", searchedUsername);
-                  if (typeof window !== "undefined") {
-                    window.dispatchEvent(
-                      new CustomEvent("updatePitchUsername", {
-                        detail: { username: searchedUsername },
-                      })
-                    );
-                  }
-                  setSelectedChat(1);
-                  setCurrentView("pitch");
-                }
+                if (onPitch) onPitch();
               }}
               className="flex items-center gap-0.5 pl-4 pr-3 py-2 rounded-full text-[13px] font-bold active:scale-[0.97] transition-all shadow-sm"
               style={{
@@ -646,8 +575,7 @@ export default function InstagramDirect({
           </button>
           <button
             onClick={() => {
-              setSelectedChat(1);
-              handlePitch();
+              if (onPitch) onPitch();
             }}
             className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
             style={{ backgroundColor: "#25D366" }}
@@ -833,6 +761,10 @@ export default function InstagramDirect({
               conversation.status === "unlocked"
                 ? "cursor-pointer hover:bg-gray-50"
                 : "opacity-70 cursor-not-allowed"
+            } ${
+              blurStartIndex !== -1 && index >= blurStartIndex
+                ? "blur-sm select-none"
+                : ""
             } transition-colors duration-150`}
             onClick={() => handleChatSelectInternal(conversation)}
             onKeyDown={(e) => {

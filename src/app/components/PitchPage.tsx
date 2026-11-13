@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, usePathname } from "next/navigation";
+import { SUB_PARAM, lerParam } from "../../lib/urlState";
 
 interface PitchPageProps {
   onBack: () => void;
@@ -906,6 +907,15 @@ export default function PitchPage({
 
   // Progresso da análise exibida junto com o vídeo, libera o restante da página ao concluir
   useEffect(() => {
+    // Atalho de teste: ?sub=oferta abre a página já com o conteúdo liberado,
+    // sem esperar a análise terminar. O bloco de VSL segue o mesmo caminho de
+    // sempre (some 1,4s depois, como no fluxo normal).
+    if (lerParam(SUB_PARAM) === "oferta") {
+      setAnalysisPercent(100);
+      setIsUnlocked(true);
+      return;
+    }
+
     const startedAt = Date.now();
     let completeTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -1601,6 +1611,18 @@ export default function PitchPage({
                 </p>
               </div>
             </motion.div>
+          )}
+
+          {/* Voltar: a etapa fica na URL, então o botão consome o histórico */}
+          {hasBack && (
+            <button
+              onClick={handleBackWithAnimation}
+              aria-label="Voltar"
+              className="fixed top-3 left-3 z-[60] w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+              style={{ backgroundColor: "rgba(0, 0, 0, 0.35)" }}
+            >
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </button>
           )}
 
           {/* Conteúdo da Página */}

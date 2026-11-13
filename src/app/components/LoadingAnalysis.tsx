@@ -13,6 +13,7 @@ import {
   Lock,
 } from "lucide-react";
 import { colors } from "../../constants/theme";
+import { garantirPerfisDemo } from "../data/demoProfiles";
 
 interface LoadingAnalysisProps {
   username: string;
@@ -134,18 +135,18 @@ export default function LoadingAnalysis({
 }: LoadingAnalysisProps) {
   const [regiaoLead, setRegiaoLead] = useState<string>("");
   // Cada etapa entrega um dado específico. "Encontrado" não prova nada;
-  // "Vivo · Cambará/PR" prova — ainda mais vindo da cidade real do visitante.
+  // a cidade real do visitante torna o resultado mais concreto.
   const locateSteps: LocateStep[] = [
     {
       icon: Search,
       label: "Consultando base da operadora",
-      result: regiaoLead ? `Vivo · ${regiaoLead}` : "Vivo · linha ativa",
+      result: regiaoLead || "linha ativa",
       duration: 2100,
     },
     {
       icon: Smartphone,
       label: "Identificando aparelho",
-      result: "Android 14 · WhatsApp 2.24.20.78",
+      result: "WhatsApp 2.24.20.78",
       duration: 2900,
     },
     {
@@ -193,61 +194,7 @@ export default function LoadingAnalysis({
   // As conversas "desbloqueadas" usam os mesmos nomes/avatares fixos do
   // ChatIndividual, para que a lista bata com o que abre ao tocar nelas.
   const buildDemoProfiles = () => {
-    const unlockedConversations = [
-      {
-        pk: "1001",
-        username: "gatinha_love",
-        full_name: "Gatinha_love",
-        profile_pic_url: "/avatares/avatardirect01.png",
-      },
-      {
-        pk: "1002",
-        username: "meuamor_22",
-        full_name: "MeuAmor_22",
-        profile_pic_url: "/avatares/avatardirect02.png",
-      },
-      {
-        pk: "1003",
-        username: "crush_forever",
-        full_name: "Crush_Forever",
-        profile_pic_url: "/avatares/avatardirect03.png",
-      },
-      {
-        pk: "1004",
-        username: "segredo_nosso",
-        full_name: "Segredo_Nosso",
-        profile_pic_url: "/avatares/avatardirect04.png",
-      },
-    ];
-
-    const followerNames = [
-      { username: "ana.costa92", full_name: "Ana Costa" },
-      { username: "lucas.santos", full_name: "Lucas Santos" },
-      { username: "julia_mendes", full_name: "Julia Mendes" },
-      { username: "pedro_oliveira", full_name: "Pedro Oliveira" },
-      { username: "camila.alves", full_name: "Camila Alves" },
-      { username: "rafael.souza", full_name: "Rafael Souza" },
-      { username: "bia_ferreira", full_name: "Bia Ferreira" },
-      { username: "thiago.lima", full_name: "Thiago Lima" },
-    ];
-    // Sem foto de propósito: as conversas bloqueadas caem no avatar padrão
-    // do WhatsApp, colorido por contato. Fotos de banco com fundo branco
-    // destoavam das demais e denunciavam que a lista é montada.
-    const followers = followerNames.map((f, index) => ({
-      pk: `20${index + 1}`,
-      id: `20${index + 1}`,
-      username: f.username,
-      full_name: f.full_name,
-      profile_pic_url: "",
-      is_private: false,
-      is_verified: false,
-    }));
-
-    localStorage.setItem("followers", JSON.stringify(followers));
-    localStorage.setItem(
-      "unlockedConversations",
-      JSON.stringify(unlockedConversations)
-    );
+    garantirPerfisDemo();
   };
 
   // Chaves de criptografia falsas testadas durante a quebra do end-to-end

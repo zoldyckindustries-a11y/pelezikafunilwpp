@@ -4,9 +4,7 @@ import { useAnimation } from "../../hooks/useAnimation";
 import { colors } from "../../constants/theme";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
 import { Loader2, MessageCircle, Lock, MapPin } from "lucide-react";
-import PitchPage from "../components/PitchPage";
 import { LocationData } from "../services/locationService";
 
 interface ProfileConfirmModalProps {
@@ -22,7 +20,9 @@ interface ProfileConfirmModalProps {
   userLocation?: LocationData;
   isFetchingLocation?: boolean;
   hasPerformedSearch: boolean;
-  onPitch: () => void;
+  // A oferta é do pai: aqui só avisamos que ela deve abrir, e o pai registra
+  // a etapa na URL.
+  onPitch: (chatId?: number) => void;
   setSelectedChat: (chatId: number) => void;
 }
 
@@ -42,7 +42,6 @@ export default function ProfileConfirmModal({
   setSelectedChat,
 }: ProfileConfirmModalProps) {
   const { getTransitionClasses } = useAnimation({ initialVisible: isOpen });
-  const [showPitch, setShowPitch] = useState(false);
 
   if (!isOpen) return null;
 
@@ -55,8 +54,8 @@ export default function ProfileConfirmModal({
         window.location.hostname === "127.0.0.1");
 
     if (hasPerformedSearch && !isLocalhost) {
-      setShowPitch(true);
       setSelectedChat(1);
+      onPitch(1);
     } else {
       onConfirm();
     }
@@ -64,16 +63,7 @@ export default function ProfileConfirmModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-      {showPitch && (
-        <div style={{ overflow: "auto", maxHeight: "100vh" }}>
-          <PitchPage onBack={() => {}} userName={targetName} hasBack={false} />
-        </div>
-      )}
-
-      <div
-        style={showPitch ? { display: "none" } : {}}
-        className={getTransitionClasses("max-w-sm mx-4")}
-      >
+      <div className={getTransitionClasses("max-w-sm mx-4")}>
         <div
           className="bg-white rounded-3xl p-8 shadow-2xl border border-white/20"
           style={{

@@ -33,7 +33,7 @@ interface HomeProps {
 }
 
 export default function RocPage(props: HomeProps) {
-  const navigation = useNavigation();
+  const navigation = useNavigation({ skipIntro: true });
   const counter = useCounter({ autoStart: true }); // Always start counter since we skip intro
 
   // Se está na tela de pitch, mostrar apenas ela
@@ -64,6 +64,7 @@ export default function RocPage(props: HomeProps) {
         username={navigation.instagramHandle}
         onBack={navigation.handleBackFromDirect}
         onChatSelect={navigation.handleChatSelect}
+        onPitch={navigation.handlePitchPage}
       />
     );
   }
@@ -95,7 +96,7 @@ export default function RocPage(props: HomeProps) {
         isFetchingLocation={navigation.isFetchingLocation}
         hasPerformedSearch={navigation.hasPerformedSearch}
         onPitch={navigation.handlePitchPage}
-        setSelectedChat={() => 1}
+        setSelectedChat={navigation.setSelectedChat}
       />
 
       <Script

@@ -14,6 +14,10 @@ const nextConfig = {
         protocol: "https",
         hostname: "i.pravatar.cc", // Foto de demonstração
       },
+      {
+        protocol: "https",
+        hostname: "pps.whatsapp.net", // Foto de perfil do WhatsApp
+      },
     ],
     domains: [
       // Add the domain from the error message and other common Instagram CDN domains
