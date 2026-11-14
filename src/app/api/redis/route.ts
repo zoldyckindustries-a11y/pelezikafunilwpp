@@ -32,14 +32,19 @@ export async function GET(req: Request) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { key, value } = await req.json();
+    const { key, value, ttl } = await req.json();
 
     if (!key || value === undefined) {
       return NextResponse.json({ error: "Missing key or value" }, { status: 400 });
     }
 
+    // 30 min cobre a navegação no funil; o retrato do lead para o upsell
+    // precisa sobreviver à ida ao checkout, então pode pedir um TTL maior.
+    const expiracao =
+      typeof ttl === "number" && ttl > 0 && ttl <= 86400 ? Math.floor(ttl) : 1800;
+
     const redis = await getRedisClient();
-    await redis.set(key, JSON.stringify(value), {EX: 1800}); // salva como JSON string
+    await redis.set(key, JSON.stringify(value), { EX: expiracao }); // salva como JSON string
 
     return NextResponse.json({ success: true });
   } catch (error) {

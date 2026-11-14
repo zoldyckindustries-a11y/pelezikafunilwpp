@@ -23,6 +23,7 @@ import {
 import { colors } from "../../constants/theme";
 import { CHAT_PREVIEWS } from "../data/chatPreviews";
 import { garantirPerfisDemo } from "../data/demoProfiles";
+import { AvatarContato } from "./AvatarContato";
 
 // Tempo de prévia antes do paywall. Longo o bastante para a pessoa ver a
 // mensagem nova chegar e tentar abrir algumas conversas.
@@ -38,74 +39,21 @@ const MIN_LEITURA_SEGUNDOS = 28;
 // onde estava em vez de reiniciar.
 const PREVIEW_START_KEY = "previewStartedAt";
 
-// Tons do avatar sem foto. O WhatsApp varia a cor por contato — um bege
-// único em todas as linhas entrega que a lista é fabricada.
-const AVATAR_TONES = [
-  "#7E9CAB",
-  "#A68B6B",
-  "#8FA68E",
-  "#A68FA0",
-  "#C49A7E",
-  "#6E9A9C",
-  "#B08B7E",
-  "#8E96A8",
-];
-
-// Avatar sem foto, no padrão do WhatsApp: inicial do contato sobre cor
-// própria. O blur é leve de propósito — some a identidade, fica a forma.
+// Avatar sem foto: a inicial e a cor vêm de AvatarContato, compartilhado com
+// a tela da conversa. Antes a cor saía do índice da linha, então abrir o chat
+// trocava a cor do mesmo contato.
 function DefaultAvatar({
   tone,
   nome,
   size = 56,
 }: {
-  tone: string;
+  tone?: string;
   nome?: string;
   size?: number;
 }) {
-  const inicial = (nome || "").trim().charAt(0).toUpperCase();
+  // Na lista a identidade fica velada; no cabeçalho da conversa, nítida.
   return (
-    <div
-      className="relative rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center"
-      style={{ width: size, height: size, backgroundColor: tone }}
-    >
-      {inicial ? (
-        <span
-          className="font-semibold select-none"
-          style={{
-            fontSize: size * 0.42,
-            color: "rgba(255,255,255,0.95)",
-            filter: "blur(1.5px)",
-          }}
-        >
-          {inicial}
-        </span>
-      ) : (
-        <>
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: "36%",
-              height: "36%",
-              top: "17%",
-              left: "32%",
-              backgroundColor: "rgba(255,255,255,0.92)",
-              filter: "blur(1.5px)",
-            }}
-          />
-          <div
-            className="absolute rounded-full"
-            style={{
-              width: "76%",
-              height: "76%",
-              bottom: "-28%",
-              left: "12%",
-              backgroundColor: "rgba(255,255,255,0.92)",
-              filter: "blur(1.5px)",
-            }}
-          />
-        </>
-      )}
-    </div>
+    <AvatarContato nome={nome} tone={tone} tamanho={size} desfocarInicial />
   );
 }
 
@@ -686,7 +634,7 @@ export default function InstagramDirect({
               onClick={() => handleChatSelectInternal(newIncomingConversation)}
             >
               <div className="relative mr-3">
-                <DefaultAvatar tone="#C49A7E" nome={newIncomingConversation.name} />
+                <DefaultAvatar nome={newIncomingConversation.name} />
                 <motion.div
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
@@ -785,7 +733,6 @@ export default function InstagramDirect({
                 />
               ) : (
                 <DefaultAvatar
-                  tone={AVATAR_TONES[(conversation.id - 1) % AVATAR_TONES.length]}
                   nome={conversation.name}
                 />
               )}
@@ -895,12 +842,27 @@ export default function InstagramDirect({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[13.5px] font-bold leading-snug mb-0.5 text-white">
-                    Você chegou ao fim da prévia
+                    Isso é tudo que a prévia libera
                   </p>
                   <p className="text-[11.5px] leading-snug text-white/70">
                     As conversas mais recentes e tudo que foi apagado continuam
                     bloqueados.
                   </p>
+                  {previewSecondsLeft > 0 && (
+                    <p className="text-[11.5px] leading-snug text-white/70 mt-1 flex items-center gap-1">
+                      <Clock className="w-3 h-3 flex-shrink-0" />
+                      <span>
+                        Encerra em{" "}
+                        <span
+                          className="font-bold tabular-nums"
+                          style={{ color: colors.primaryBright }}
+                        >
+                          {Math.floor(previewSecondsLeft / 60)}:
+                          {String(previewSecondsLeft % 60).padStart(2, "0")}
+                        </span>
+                      </span>
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -975,8 +937,11 @@ export default function InstagramDirect({
         )}
       </AnimatePresence>
 
+      {/* O relógio só aparece sozinho. Quando a pessoa chega ao fim da
+          lista, a contagem migra para aquele cartão: os dois juntos diziam
+          "acabou" e "ainda tem 0:23" na mesma tela. */}
       <AnimatePresence>
-        {previewSecondsLeft > 0 && (
+        {previewSecondsLeft > 0 && !showScrollOffer && (
           <motion.div
             key="banner-previa"
             initial={{ opacity: 0, y: 24 }}

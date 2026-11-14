@@ -539,8 +539,16 @@ export default function LoadingAnalysis({
               </div>
               <div
                 ref={consoleRef}
-                className="px-3 py-2.5 font-mono text-[10.5px] leading-relaxed overflow-y-auto"
-                style={{ height: 92, color: "#8696A0" }}
+                /* A barra de rolagem nativa do Windows (com setinhas e trilho
+                   cinza) aparecia dentro da janela do terminal e entregava
+                   que aquilo é uma div. A rolagem continua, só a barra some. */
+                className="px-3 py-2.5 font-mono text-[10.5px] leading-relaxed overflow-y-auto [&::-webkit-scrollbar]:hidden"
+                style={{
+                  height: 92,
+                  color: "#8696A0",
+                  scrollbarWidth: "none",
+                  msOverflowStyle: "none",
+                }}
               >
                 {linhasLog.map((linha, i) => (
                   <div

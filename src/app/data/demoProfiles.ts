@@ -12,11 +12,15 @@ export interface DemoProfile {
 }
 
 export const CONVERSAS_LIBERADAS: DemoProfile[] = [
+  // Sem foto de propósito. O rosto entregava o gênero do contato, e o que
+  // faz a pessoa travar na oferta é não saber com quem o alvo está falando.
+  // Fica a inicial sobre cor, exatamente como o WhatsApp faz. O nome também
+  // é neutro pelo mesmo motivo.
   {
     pk: "1001",
-    username: "gatinha_love",
-    full_name: "Gatinha_love",
-    profile_pic_url: "/avatares/avatardirect01.png",
+    username: "alex",
+    full_name: "Alex",
+    profile_pic_url: "",
   },
   {
     pk: "1002",
@@ -38,11 +42,13 @@ export const CONVERSAS_LIBERADAS: DemoProfile[] = [
   },
 ];
 
-// Sem foto de propósito: as conversas bloqueadas caem no avatar padrão
-// do WhatsApp, colorido por contato. Fotos de banco com fundo branco
-// destoavam das demais e denunciavam que a lista é montada.
+// Quase todas sem foto: as conversas bloqueadas caem no avatar padrão do
+// WhatsApp, colorido por contato. Fotos de banco com fundo branco destoavam
+// das demais e denunciavam que a lista é montada.
 export const CONTATOS_BLOQUEADOS: DemoProfile[] = [
-  { pk: "2001", username: "ana.costa92", full_name: "Ana Costa", profile_pic_url: "" },
+  // Recebeu a foto que saiu da primeira conversa: uma lista só de iniciais
+  // é tão artificial quanto uma lista só de fotos.
+  { pk: "2001", username: "ana.costa92", full_name: "Ana Costa", profile_pic_url: "/avatares/avatardirect01.png" },
   { pk: "2002", username: "lucas.santos", full_name: "Lucas Santos", profile_pic_url: "" },
   { pk: "2003", username: "julia_mendes", full_name: "Julia Mendes", profile_pic_url: "" },
   { pk: "2004", username: "pedro_oliveira", full_name: "Pedro Oliveira", profile_pic_url: "" },
@@ -68,7 +74,7 @@ export function garantirPerfisDemo() {
     id: `20${index + 1}`,
     username: contato.username,
     full_name: contato.full_name,
-    profile_pic_url: "",
+    profile_pic_url: contato.profile_pic_url,
     is_private: false,
     is_verified: false,
   }));

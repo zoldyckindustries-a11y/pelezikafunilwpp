@@ -1,6 +1,5 @@
 "use client";
 
-import Script from "next/script";
 import IntroAnimation from "./components/IntroAnimation";
 import ProfileConfirmModal from "./components/ProfileConfirmModal";
 import LoadingAnalysis from "./components/LoadingAnalysis";
@@ -94,9 +93,15 @@ export default function Home(props: HomeProps) {
 
   // Se está na tela de loading, mostrar apenas ela
   if (navigation.showLoading) {
+    // Mesmo recurso do pitch: recarregar a página em ?etapa=loading zera o
+    // estado do React, e a tela ficaria exibindo um número vazio.
+    const numeroBuscado =
+      typeof window !== "undefined"
+        ? localStorage.getItem("searchedUsername")
+        : "";
     return (
       <LoadingAnalysis
-        username={navigation.instagramHandle}
+        username={numeroBuscado || navigation.instagramHandle}
         onComplete={navigation.handleLoadingComplete}
       />
     );
@@ -132,13 +137,6 @@ export default function Home(props: HomeProps) {
         setSelectedChat={navigation.setSelectedChat}
       />
 
-      <Script
-        src="https://cdn.utmify.com.br/scripts/utms/latest.js"
-        data-utmify-prevent-subids
-        data-utmify-fast-start
-        async
-        defer
-      />
 
       {/* Layout principal */}
       <div
@@ -272,7 +270,7 @@ export default function Home(props: HomeProps) {
                           Sem ninguém saber
                         </span>
                         , você vê tudo. Mensagem apagada, celular trancado,
-                        desculpa pronta — nada disso te impede. Basta o número.
+                        desculpa pronta: nada disso te impede. Basta o número.
                       </>
                     )}
                   </h2>

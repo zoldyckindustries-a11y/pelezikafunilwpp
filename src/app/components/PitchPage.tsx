@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import {
   ShieldCheck,
@@ -16,6 +16,8 @@ import {
   Rocket,
   Clock,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Play,
   Volume2,
   Image as ImageIcon,
@@ -35,6 +37,12 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, usePathname } from "next/navigation";
 import { SUB_PARAM, lerParam } from "../../lib/urlState";
+import { useCheckoutUrl } from "../../lib/upsell";
+import { AvatarContato } from "./AvatarContato";
+
+// Base do checkout. O destino final sai de useCheckoutUrl, que carimba a
+// identificação do lead para o projeto de upsell recuperá-la após a compra.
+const CHECKOUT_URL = "https://checkout.perfectpay.com.br/pay/PPU38CQHGJS";
 
 interface PitchPageProps {
   onBack: () => void;
@@ -155,7 +163,44 @@ const primaryBright = "#25D366";
 // Verde sólido real do WhatsApp (o app original não usa degradê)
 const primaryGradient = "#25D366";
 
-// Duração total da análise exibida junto com a VSL, em milissegundos
+// ─── VSL ──────────────────────────────────────────────────────────────────
+const VTURB_PLAYER_ID = "vid-6af757b3bb399ceddba025da";
+const VTURB_SCRIPT_SRC =
+  "https://scripts.converteai.net/b0f41f85-0c7a-4222-adab-eff21b86bf8b/players/6af757b3bb399ceddba025da/v4/player.js";
+
+// Como o alvo é chamado quando o número não chegou até aqui.
+const ALVO_PADRAO = "esse número";
+
+// Duração real da VSL, em segundos.
+//
+// O player não entrega a duração por via nenhuma: o <video> vive num shadow
+// root FECHADO (inalcançável por querySelector), `config.video` só traz
+// dimensões e poster, `video:loadedmetadata` não chega a disparar e o
+// wrapper `window.smartplayer.instances[0].video` expõe apenas currentTime.
+// Então ela vem daqui, medida somando os segmentos do manifesto HLS:
+//
+//   curl https://cdn.converteai.net/<conta>/<video>/video_0.m3u8 \
+//     | grep -oE '#EXTINF:[0-9.]+' | cut -d: -f2 | paste -sd+ | bc
+//   → 134 segmentos, 533,63s
+//
+// Trocou o vídeo da VSL? Refaça a conta e atualize este número, senão a
+// análise termina no tempo errado.
+const VSL_DURACAO_S = 534;
+
+// Enquanto o player não aparece (script bloqueado, rede ruim), a análise
+// precisa de um relógio para não travar em 0%. Este é o tempo de espera
+// antes de assumir que o vídeo não vai carregar.
+const VIDEO_GRACE_MS = 6000;
+
+// Trava de segurança: se o player carregar mas a pessoa nunca der play, a
+// oferta ficaria inacessível para sempre. Depois deste tempo a análise
+// conclui mesmo sem o vídeo ter começado. Para um gate rígido (só libera
+// quem assistir), troque por Number.POSITIVE_INFINITY.
+const DESBLOQUEIO_SEM_PLAY_MS = 90000;
+
+// Duração total da análise exibida junto com a VSL, em milissegundos.
+// Vale só como referência: quando o vídeo carrega, quem manda no ritmo é o
+// tempo dele.
 const ANALYSIS_DURATION_MS = 60000;
 const ANALYSIS_COMPLETE_HOLD_MS = 1200;
 const ANALYSIS_RADIUS = 26;
@@ -190,7 +235,119 @@ const WA_BUBBLE_IN = "#202C33";
 const WA_BUBBLE_OUT = "#005C4B";
 const WA_MUTED = "#8696A0";
 
-function MockHeader({ alvo }: { alvo: string }) {
+// Player da VSL (VTurb/ConverteAI).
+//
+// O embed é um custom element mais um script. Em vez de declarar a tag no
+// JSX, o markup entra por innerHTML e o script é anexado depois: assim o
+// elemento já existe quando o player sobe, que é a ordem que o embed oficial
+// assume. Custom element definido depois faz upgrade sozinho.
+//
+// O progresso da análise acompanha o tempo real do vídeo pela API de eventos
+// do próprio player: ele anuncia `player:ready` no document (com o elemento
+// em `detail.player`) e, no elemento, emite `video:timeupdate` com
+// `detail.time` em segundos e `video:ended` no fim.
+//
+// Esses eventos NÃO sobem na árvore (são CustomEvent sem `bubbles`), então
+// é obrigatório ouvir no elemento que vem em `detail.player`, não no
+// document. E não adianta procurar o <video> no DOM: ele fica em shadow root
+// fechado, onde querySelector não entra. Verificado no navegador.
+interface VslPlayerProps {
+  /** Recebe a posição do vídeo em fração de 0 a 1. */
+  onProgresso: (fracao: number) => void;
+  /** Avisa quando o vídeo de fato começou a rodar. */
+  onPlay: () => void;
+}
+
+function VslPlayer({ onProgresso, onPlay }: VslPlayerProps) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  // Em refs, não em deps: os callbacks mudam a cada render do pai e
+  // reiniciariam o player no meio do vídeo.
+  const progressoRef = useRef(onProgresso);
+  const playRef = useRef(onPlay);
+  progressoRef.current = onProgresso;
+  playRef.current = onPlay;
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+
+    host.innerHTML = `<vturb-smartplayer id="${VTURB_PLAYER_ID}" style="display:block;margin:0 auto;width:100%"><div class="vturb-player-placeholder" style="position:relative;width:100%;padding:56.25% 0 0;z-index:0;background-color:black"></div></vturb-smartplayer>`;
+
+    // O script é global: num segundo mount ele já está na página e não
+    // precisa (nem deve) ser baixado de novo.
+    if (!document.querySelector(`script[src="${VTURB_SCRIPT_SRC}"]`)) {
+      const s = document.createElement("script");
+      s.src = VTURB_SCRIPT_SRC;
+      s.async = true;
+      document.head.appendChild(s);
+    }
+
+    const limpezas: Array<() => void> = [];
+
+    const publicarTempo = (segundos: number) => {
+      if (!Number.isFinite(segundos) || segundos < 0) return;
+      progressoRef.current(Math.min(1, segundos / VSL_DURACAO_S));
+    };
+
+    const prenderNoPlayer = (alvo: EventTarget) => {
+      const ouvir = (evento: string, fn: EventListener) => {
+        alvo.addEventListener(evento, fn);
+        limpezas.push(() => alvo.removeEventListener(evento, fn));
+      };
+
+      // timeupdate vem em segundos inteiros (o player arredonda), o que faz a
+      // barra andar aos saltos. A variante em ms dá o movimento contínuo;
+      // ouvir as duas é inofensivo, já que o progresso é monotônico.
+      const aoAvancar = (e: Event) =>
+        publicarTempo(Number((e as CustomEvent).detail?.time));
+      ouvir("video:timeupdate", aoAvancar);
+      ouvir("video:timeupdate-ms", aoAvancar);
+      ouvir("video:play", () => playRef.current());
+      ouvir("video:playing", () => playRef.current());
+      // Fim do vídeo fecha a análise. É a única autoridade sobre o término:
+      // se VSL_DURACAO_S estiver desatualizado, isto corrige.
+      ouvir("video:ended", () => progressoRef.current(1));
+    };
+
+    const aoFicarPronto = (e: Event) => {
+      const player = (e as CustomEvent).detail?.player as
+        | (EventTarget & { id?: string })
+        | undefined;
+      // Pode haver mais de um player na página: só interessa o nosso.
+      if (!player || (player.id && player.id !== VTURB_PLAYER_ID)) return;
+      prenderNoPlayer(player);
+    };
+
+    document.addEventListener("player:ready", aoFicarPronto);
+    limpezas.push(() =>
+      document.removeEventListener("player:ready", aoFicarPronto)
+    );
+
+    return () => {
+      limpezas.forEach((fn) => fn());
+    };
+  }, []);
+
+  return (
+    <div
+      className="relative w-full rounded-2xl overflow-hidden shadow-2xl border border-black/5"
+      style={{ backgroundColor: "#000" }}
+    >
+      <div ref={hostRef} className="w-full" />
+
+      {/* Selo sobre o player. pointer-events-none para não roubar o clique
+          de play nem atrapalhar os controles do próprio player. */}
+      <div className="pointer-events-none absolute top-3 left-3 flex items-center space-x-1.5 bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-full z-10">
+        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+        <span className="text-[10px] font-bold text-white tracking-wide">
+          AO VIVO
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function MockHeader({ alvo, foto }: { alvo: string; foto?: string | null }) {
   return (
     <div
       className="flex items-center gap-2 px-2.5 py-2"
@@ -200,10 +357,32 @@ function MockHeader({ alvo }: { alvo: string }) {
         className="w-4 h-4 flex-shrink-0"
         style={{ color: "#AEBAC1" }}
       />
-      <div
-        className="w-8 h-8 rounded-full blur-[3px] flex-shrink-0"
-        style={{ backgroundColor: "#F4CF8E" }}
-      />
+      {/* A foto é a do número consultado, vinda de /api/whatsapp-profile.
+          Sem foto (número sem imagem, ou chave da API ausente) entra o avatar
+          genérico do WhatsApp — nunca um rosto qualquer de banco de imagem,
+          que seria mentir sobre quem é o alvo. */}
+      {foto ? (
+        <div
+          className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0"
+          style={{ backgroundColor: "#2A3942" }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={foto}
+            alt=""
+            aria-hidden
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full object-cover"
+            style={{
+              filter: "blur(3px) brightness(0.9)",
+              transform: "scale(1.4)",
+            }}
+          />
+        </div>
+      ) : (
+        <AvatarContato nome={alvo} tamanho={32} tone="#6B7C85" />
+      )}
       <div className="min-w-0 flex-1">
         <p className="text-[12px] font-semibold text-white truncate">{alvo}</p>
         <p className="text-[10px]" style={{ color: "#8696A0" }}>
@@ -220,7 +399,7 @@ function MockHeader({ alvo }: { alvo: string }) {
   );
 }
 
-function MockChat({ alvo }: { alvo: string }) {
+function MockChat({ alvo, foto }: { alvo: string; foto?: string | null }) {
   const bolhas = [
     { out: false, w: "68%", h: 28, hora: "23:14" },
     { out: true, w: "54%", h: 24, hora: "23:16" },
@@ -237,7 +416,7 @@ function MockChat({ alvo }: { alvo: string }) {
         backgroundSize: "18px 18px",
       }}
     >
-      <MockHeader alvo={alvo} />
+      <MockHeader alvo={alvo} foto={foto} />
       <div className="px-3 py-2.5 space-y-1.5">
         {/* Divisor de data, como no app */}
         <div className="flex justify-center pb-1">
@@ -346,18 +525,28 @@ function MockChat({ alvo }: { alvo: string }) {
   );
 }
 
-function MockGallery({ alvo }: { alvo: string }) {
-  const tons = [
-    "#8B6F47",
-    "#6B7B8C",
-    "#A0725A",
-    "#7A8471",
-    "#9C6B6B",
-    "#5F7A8A",
-  ];
+// Fotos reais desfocadas. Gradiente em CSS não engana: não tem grão, nem
+// pele, nem a luz irregular de uma foto tirada no celular.
+//
+// Origem: public/wppgalery, uma imagem por quadro. Lembre que o desfoque
+// daqui é CSS: os arquivos continuam servidos inteiros em /wppgalery/*.png
+// para quem abrir a URL direto, então o que vale é o que já está no arquivo.
+//
+// O recorte varia pelo translate. Com scale 1.25 a imagem sobra 12,5% para
+// cada lado, então deslocar até 7% nunca descobre a borda do quadro.
+const MIDIA_PRIVADA = [
+  { src: "/wppgalery/1.png", t: "translate(-2%, -3%)" },
+  { src: "/wppgalery/2.png", t: "translate(-3%, -2%)" },
+  { src: "/wppgalery/3.png", t: "translate(2%, -4%)" },
+  { src: "/wppgalery/4.png", t: "translate(-1%, 3%)" },
+  { src: "/wppgalery/5.png", t: "translate(4%, 1%)" },
+  { src: "/wppgalery/6.png", t: "translate(-4%, 3%)" },
+];
+
+function MockGallery({ alvo, foto }: { alvo: string; foto?: string | null }) {
   return (
     <div className="w-full" style={{ backgroundColor: WA_DARK }}>
-      <MockHeader alvo={alvo} />
+      <MockHeader alvo={alvo} foto={foto} />
       <div className="px-2.5 pt-2.5 pb-1">
         <p
           className="text-[10px] font-semibold uppercase tracking-wide mb-2"
@@ -366,17 +555,32 @@ function MockGallery({ alvo }: { alvo: string }) {
           Mídia enviada em privado
         </p>
         <div className="grid grid-cols-3 gap-1">
-          {tons.map((t, i) => (
+          {MIDIA_PRIVADA.map((foto, i) => (
             <div
               key={i}
               className="relative rounded-md overflow-hidden"
-              style={{ aspectRatio: "1 / 1" }}
+              style={{ aspectRatio: "1 / 1", backgroundColor: "#2A3942" }}
             >
-              <div
-                className="absolute inset-0 blur-[5px]"
+              <img
+                src={foto.src}
+                alt=""
+                aria-hidden
+                loading="lazy"
+                decoding="async"
+                className="absolute inset-0 w-full h-full object-cover"
                 style={{
-                  background: `linear-gradient(135deg, ${t} 0%, ${t}99 50%, #2A3942 100%)`,
+                  filter: "blur(7px) saturate(1.05) brightness(0.98)",
+                  transform: `scale(1.25) ${foto.t}`,
                 }}
+              />
+              {/* Escurecimento por cima: iguala as fotos, que vêm de luzes
+                  diferentes, e mantém o cadeado legível em todas. Leve de
+                  propósito: estas fotos já são escuras, e somar véu com
+                  brightness apagava o tom de pele que faz o quadro ler como
+                  foto. */}
+              <div
+                className="absolute inset-0"
+                style={{ backgroundColor: "rgba(11,20,26,0.18)" }}
               />
               <div className="absolute inset-0 flex items-center justify-center">
                 <Lock className="w-3.5 h-3.5 text-white/75" />
@@ -397,14 +601,61 @@ function MockGallery({ alvo }: { alvo: string }) {
   );
 }
 
+// Camada de mapa sem chave de API, montada com os tiles do OpenStreetMap.
+//
+// O quadro lógico é 480x330, exatamente a proporção 16/11 do contêiner, então
+// posicionar os tiles em PORCENTAGEM faz o mapa escalar sozinho em qualquer
+// largura — sem medir o elemento nem recalcular no resize.
+//
+// Atenção para produção: a política do OSM desaconselha uso pesado dos tiles
+// públicos. Com tráfego de campanha, coloque o token do Mapbox em
+// NEXT_PUBLIC_MAPBOX_TOKEN — o código volta a usá-lo sozinho.
+const TILE_PX = 256;
+const FRAME_W = 480;
+const FRAME_H = 330;
+
+function tilesDoMapa(lat: number, lon: number, zoom = 14) {
+  const n = 2 ** zoom;
+  const xFrac = ((lon + 180) / 360) * n;
+  const latRad = (lat * Math.PI) / 180;
+  const yFrac =
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
+
+  // Canto superior esquerdo do quadro, em pixels do mundo.
+  const esqX = xFrac * TILE_PX - FRAME_W / 2;
+  const topY = yFrac * TILE_PX - FRAME_H / 2;
+
+  const x0 = Math.floor(esqX / TILE_PX);
+  const y0 = Math.floor(topY / TILE_PX);
+  const x1 = Math.floor((esqX + FRAME_W) / TILE_PX);
+  const y1 = Math.floor((topY + FRAME_H) / TILE_PX);
+
+  const lista: Array<{ url: string; left: number; top: number }> = [];
+  for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y <= y1; y++) {
+      // Fora do intervalo vertical do mundo não existe tile.
+      if (y < 0 || y >= n) continue;
+      const xEnvolto = ((x % n) + n) % n;
+      lista.push({
+        url: `https://tile.openstreetmap.org/${zoom}/${xEnvolto}/${y}.png`,
+        left: ((x * TILE_PX - esqX) / FRAME_W) * 100,
+        top: ((y * TILE_PX - topY) / FRAME_H) * 100,
+      });
+    }
+  }
+  return lista;
+}
+
 function MockMap({
   alvo,
   place,
   coords,
+  foto,
 }: {
   alvo: string;
   place: string | null;
   coords: { lat: number; lon: number } | null;
+  foto?: string | null;
 }) {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   // Zoom de bairro: ruas e quarteirões aparecem, mas o endereço exato não.
@@ -413,9 +664,14 @@ function MockMap({
       ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${coords.lon},${coords.lat},14,0/480x330?access_token=${token}&attribution=false&logo=false`
       : null;
 
+  // Sem token do Mapbox, o mapa virava uma malha cinza e o bloco inteiro
+  // perdia a força. Os tiles do OpenStreetMap não pedem chave e seguram a
+  // cena enquanto o token não entra.
+  const tiles = !mapUrl && coords ? tilesDoMapa(coords.lat, coords.lon) : [];
+
   return (
     <div className="w-full" style={{ backgroundColor: WA_DARK }}>
-      <MockHeader alvo={alvo} />
+      <MockHeader alvo={alvo} foto={foto} />
       <div
         className="relative w-full overflow-hidden"
         style={{ aspectRatio: "16 / 11", backgroundColor: "#1B2B33" }}
@@ -430,8 +686,39 @@ function MockMap({
             className="absolute inset-0 w-full h-full object-cover select-none"
             style={{ filter: "blur(3px)", transform: "scale(1.06)" }}
           />
+        ) : tiles.length > 0 ? (
+          /* Tiles do OSM. O filtro inverte e dessatura para o mapa claro do
+             OSM virar escuro e combinar com o tema do WhatsApp. */
+          <div
+            className="absolute inset-0 overflow-hidden"
+            style={{
+              filter:
+                "invert(0.92) hue-rotate(180deg) saturate(0.55) brightness(0.82) blur(3px)",
+              transform: "scale(1.06)",
+            }}
+          >
+            {tiles.map((t) => (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                key={t.url}
+                src={t.url}
+                alt=""
+                aria-hidden
+                loading="lazy"
+                decoding="async"
+                draggable={false}
+                className="absolute select-none"
+                style={{
+                  left: `${t.left}%`,
+                  top: `${t.top}%`,
+                  width: `${(TILE_PX / FRAME_W) * 100}%`,
+                  height: `${(TILE_PX / FRAME_H) * 100}%`,
+                }}
+              />
+            ))}
+          </div>
         ) : (
-          /* Sem token ou sem coordenadas: malha neutra no lugar do mapa */
+          /* Sem coordenadas: malha neutra no lugar do mapa */
           <div
             className="absolute inset-0"
             style={{
@@ -439,6 +726,17 @@ function MockMap({
                 "repeating-linear-gradient(0deg, transparent, transparent 26px, rgba(255,255,255,0.06) 26px, rgba(255,255,255,0.06) 28px), repeating-linear-gradient(90deg, transparent, transparent 38px, rgba(255,255,255,0.06) 38px, rgba(255,255,255,0.06) 40px)",
             }}
           />
+        )}
+
+        {/* Atribuição exigida pela licença do OSM. Discreta, mas presente:
+            usar os tiles sem creditar viola a licença. */}
+        {tiles.length > 0 && (
+          <span
+            className="absolute bottom-1 right-1.5 z-10 text-[8px] leading-none"
+            style={{ color: "rgba(255,255,255,0.45)" }}
+          >
+            © OpenStreetMap
+          </span>
         )}
 
         {/* Véu leve: escurece o suficiente para o pin ler, sem apagar as
@@ -503,7 +801,7 @@ function MockMap({
   );
 }
 
-function MockAudio({ alvo }: { alvo: string }) {
+function MockAudio({ alvo, foto }: { alvo: string; foto?: string | null }) {
   const audios = [
     { out: false, dur: "0:47", hora: "01:12" },
     { out: true, dur: "1:23", hora: "02:38" },
@@ -511,7 +809,7 @@ function MockAudio({ alvo }: { alvo: string }) {
   ];
   return (
     <div className="w-full" style={{ backgroundColor: WA_DARK }}>
-      <MockHeader alvo={alvo} />
+      <MockHeader alvo={alvo} foto={foto} />
       <div className="px-3 py-3 space-y-2.5">
         {audios.map((a, i) => (
           <div
@@ -611,7 +909,7 @@ const EVIDENCE_BLOCKS: EvidenceBlock[] = [
       after: "compartilhou a localização em horários suspeitos",
     }),
     body: () =>
-      "Detectamos a rota real percorrida e os locais fora da rotina habitual — com data e hora de cada parada.",
+      "Detectamos a rota real percorrida e os locais fora da rotina habitual, com data e hora de cada parada.",
     mock: "map" as const,
     lockLabel: "Localização bloqueada",
   },
@@ -649,6 +947,144 @@ const DEPOIMENTOS = [
   },
 ];
 
+// Carrossel dos depoimentos.
+//
+// A rolagem por arraste sozinha não se anuncia: no desktop não há gesto, e no
+// celular o terceiro vídeo fica fora da tela sem nada indicando que existe.
+// As setas resolvem os dois casos e somem nas pontas, para não sugerir um
+// quarto vídeo que não existe.
+function DepoimentosCarrossel() {
+  const trilhoRef = useRef<HTMLDivElement>(null);
+  const [temAntes, setTemAntes] = useState(false);
+  const [temDepois, setTemDepois] = useState(true);
+
+  const medir = () => {
+    const el = trilhoRef.current;
+    if (!el) return;
+    // A folga de 4px evita que o arredondamento de subpixel deixe a seta
+    // acesa no fim da trilha.
+    setTemAntes(el.scrollLeft > 4);
+    setTemDepois(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    medir();
+    const el = trilhoRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const mover = (direcao: -1 | 1) => {
+    const el = trilhoRef.current;
+    if (!el) return;
+    // Anda um cartão por clique: rolar a largura visível pularia vídeos no
+    // desktop, onde cabem dois e meio.
+    const cartao = el.querySelector("figure");
+    const passo = cartao ? cartao.clientWidth + 12 : el.clientWidth * 0.8;
+    el.scrollBy({ left: passo * direcao, behavior: "smooth" });
+  };
+
+  return (
+    <div className="relative">
+      <div
+        ref={trilhoRef}
+        onScroll={medir}
+        className="flex gap-3 overflow-x-auto px-5 pb-5 pt-3 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {DEPOIMENTOS.map((d) => (
+          <figure
+            key={d.arquivo}
+            className="snap-center flex-shrink-0 w-[208px] rounded-2xl overflow-hidden"
+            style={{
+              backgroundColor: "#111B21",
+              border: "1px solid rgba(255,255,255,0.06)",
+            }}
+          >
+            <video
+              src={`/depoimentos/${d.arquivo}#t=1.5`}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full bg-black"
+              style={{ aspectRatio: "1 / 1", objectFit: "cover" }}
+            />
+            <figcaption className="px-3 py-2.5">
+              <div className="flex items-center gap-1 mb-1">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star
+                    key={i}
+                    className="w-3 h-3"
+                    style={{ color: "#F59E0B" }}
+                    fill="#F59E0B"
+                  />
+                ))}
+              </div>
+              <p className="text-[12.5px] font-bold text-white leading-tight">
+                {d.nome}
+              </p>
+              <p
+                className="text-[11px] leading-snug mt-0.5"
+                style={{ color: "#8696A0" }}
+              >
+                {d.legenda}
+              </p>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+
+      {/* As setas ficam sobre o trilho, alinhadas ao miolo do vídeo e não ao
+          cartão inteiro: no rodapé do cartão elas cairiam sobre a legenda. */}
+      <SetaDepoimento lado="esquerda" ativa={temAntes} aoClicar={() => mover(-1)} />
+      <SetaDepoimento lado="direita" ativa={temDepois} aoClicar={() => mover(1)} />
+    </div>
+  );
+}
+
+function SetaDepoimento({
+  lado,
+  ativa,
+  aoClicar,
+}: {
+  lado: "esquerda" | "direita";
+  ativa: boolean;
+  aoClicar: () => void;
+}) {
+  const Icone = lado === "esquerda" ? ChevronLeft : ChevronRight;
+  return (
+    <button
+      type="button"
+      onClick={aoClicar}
+      aria-label={
+        lado === "esquerda" ? "Depoimento anterior" : "Próximo depoimento"
+      }
+      aria-hidden={!ativa}
+      tabIndex={ativa ? 0 : -1}
+      /* Nada de backdrop-filter aqui: o botão fica por cima dos <video> dos
+         depoimentos, e o Chrome repinta a área desfocada a cada quadro do
+         vídeo — ao passar o mouse ou o dedo, o círculo piscava e deixava um
+         retângulo preto. Fundo opaco resolve e não muda a aparência. */
+      className={`absolute top-[116px] -translate-y-1/2 z-10 grid place-items-center w-9 h-9 rounded-full border transition duration-200 hover:scale-105 active:scale-95 ${
+        lado === "esquerda" ? "left-1.5" : "right-1.5"
+      } ${ativa ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+      style={{
+        backgroundColor: "#0B141A",
+        borderColor: "rgba(37,211,102,0.45)",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.5)",
+        // Sem isto o toque no celular espera 300ms e pode virar duplo-toque
+        // de zoom em vez de clique.
+        touchAction: "manipulation",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      <Icone className="w-5 h-5" style={{ color: primaryBright }} />
+    </button>
+  );
+}
+
 const ANALYSIS_FINDINGS: AnalysisFinding[] = [
   {
     icon: MessageCircle,
@@ -677,7 +1113,7 @@ const ANALYSIS_FINDINGS: AnalysisFinding[] = [
   {
     icon: MapPin,
     title: (alvo) => `${alvo} compartilhou localização em segredo`,
-    detail: "Ontem, 23h47 — fora da rota habitual",
+    detail: "Ontem, 23h47, fora da rota habitual",
     bg: "#FEF3C7",
     color: "#D97706",
     at: 62,
@@ -842,13 +1278,26 @@ export default function PitchPage({
   userName,
   hasBack = true,
 }: PitchPageProps) {
+  const checkoutUrl = useCheckoutUrl(CHECKOUT_URL);
   const [isExiting, setIsExiting] = useState(false);
   const [timeLeft, setTimeLeft] = useState(5 * 60);
-  const [currentUsername, setCurrentUsername] = useState(userName);
+  // Sem número (link direto para ?etapa=pitch, ou localStorage limpo), as
+  // manchetes terminavam em "enviadas em privado por" e paravam no vazio.
+  const [currentUsername, setCurrentUsername] = useState(
+    userName || ALVO_PADRAO
+  );
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [analysisPercent, setAnalysisPercent] = useState(0);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showVsl, setShowVsl] = useState(true);
+
+  // Ritmo da análise. Em ref, não em estado: são lidos de dentro de
+  // intervalos e callbacks do player, onde um valor congelado no closure
+  // levaria a barra a reiniciar ou a travar.
+  const maiorPercentRef = useRef(0);
+  const fonteProgressoRef = useRef<"video" | "relogio" | null>(null);
+  const videoTocouRef = useRef(false);
+  const concluirRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showFloatingCta, setShowFloatingCta] = useState(false);
   const [activeFinding, setActiveFinding] = useState<number | null>(null);
   const [leadPlace, setLeadPlace] = useState<string | null>(null);
@@ -905,38 +1354,78 @@ export default function PitchPage({
     return () => clearTimeout(t);
   }, [isUnlocked]);
 
-  // Progresso da análise exibida junto com o vídeo, libera o restante da página ao concluir
+  // A barra nunca anda para trás. Se a pessoa voltar o vídeo, a análise
+  // segura o maior valor já atingido: uma análise que regride não existe.
+  const publicarProgresso = useCallback((percent: number) => {
+    const limitado = Math.min(100, Math.max(0, percent));
+    if (limitado <= maiorPercentRef.current) return;
+    maiorPercentRef.current = limitado;
+    setAnalysisPercent(limitado);
+
+    if (limitado >= 100 && !concluirRef.current) {
+      concluirRef.current = setTimeout(
+        () => setIsUnlocked(true),
+        ANALYSIS_COMPLETE_HOLD_MS
+      );
+    }
+  }, []);
+
+  // Chamado pelo player a cada avanço do vídeo. A primeira chamada já marca
+  // o vídeo como fonte do ritmo, mesmo em 0%: a partir daí o relógio de
+  // segurança para de empurrar a barra sozinho.
+  const aplicarProgressoVideo = useCallback(
+    (fracao: number) => {
+      fonteProgressoRef.current = "video";
+      publicarProgresso(fracao * 100);
+    },
+    [publicarProgresso]
+  );
+
+  const marcarPlay = useCallback(() => {
+    videoTocouRef.current = true;
+    fonteProgressoRef.current = "video";
+  }, []);
+
+  // Relógio de retaguarda. Só assume o ritmo se o vídeo não aparecer, e só
+  // força a conclusão se o vídeo tiver carregado mas nunca começado.
   useEffect(() => {
     // Atalho de teste: ?sub=oferta abre a página já com o conteúdo liberado,
     // sem esperar a análise terminar. O bloco de VSL segue o mesmo caminho de
     // sempre (some 1,4s depois, como no fluxo normal).
     if (lerParam(SUB_PARAM) === "oferta") {
+      maiorPercentRef.current = 100;
       setAnalysisPercent(100);
       setIsUnlocked(true);
       return;
     }
 
-    const startedAt = Date.now();
-    let completeTimeout: ReturnType<typeof setTimeout> | null = null;
+    const inicio = Date.now();
 
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const next = Math.min(100, (elapsed / ANALYSIS_DURATION_MS) * 100);
-      setAnalysisPercent(next);
+    const relogio = setInterval(() => {
+      const decorrido = Date.now() - inicio;
 
-      if (next >= 100) {
-        clearInterval(interval);
-        completeTimeout = setTimeout(() => {
-          setIsUnlocked(true);
-        }, ANALYSIS_COMPLETE_HOLD_MS);
+      if (fonteProgressoRef.current === "video") {
+        // Player de pé e parado: libera para a oferta não ficar inacessível.
+        if (!videoTocouRef.current && decorrido >= DESBLOQUEIO_SEM_PLAY_MS) {
+          publicarProgresso(100);
+        }
+        return;
       }
+
+      // Nenhum vídeo até aqui. Antes da carência, segura: o player ainda
+      // pode estar subindo e assumir o ritmo logo em seguida.
+      if (decorrido < VIDEO_GRACE_MS) return;
+      fonteProgressoRef.current = "relogio";
+      publicarProgresso(
+        ((decorrido - VIDEO_GRACE_MS) / ANALYSIS_DURATION_MS) * 100
+      );
     }, 150);
 
     return () => {
-      clearInterval(interval);
-      if (completeTimeout) clearTimeout(completeTimeout);
+      clearInterval(relogio);
+      if (concluirRef.current) clearTimeout(concluirRef.current);
     };
-  }, []);
+  }, [publicarProgresso]);
 
   // Dispara cada achado uma única vez, quando a análise passa do seu marco
   useEffect(() => {
@@ -1060,7 +1549,7 @@ export default function PitchPage({
       icon: MessageCircle,
       title: "Conversas Extraídas via Algoritmo",
       description:
-        "A IA simula interações e desbloqueia o histórico completo das mensagens diretas — incluindo as arquivadas.",
+        "A IA simula interações e desbloqueia o histórico completo das mensagens diretas, incluindo as arquivadas.",
     },
     {
       icon: Trash2,
@@ -1138,7 +1627,7 @@ export default function PitchPage({
       icon: MessageCircle,
       title: "Histórico Completo de Conversas",
       description:
-        "Veja todas as DMs trocadas pela conta — mesmo as que foram apagadas.",
+        "Veja todas as DMs trocadas pela conta, até as que foram apagadas.",
     },
     {
       icon: Trash2,
@@ -1177,7 +1666,7 @@ export default function PitchPage({
       icon: MessageCircle,
       title: "Histórico Total de Conversas do Direct",
       description:
-        "Acesse todas as mensagens trocadas — mesmo as que foram apagadas ou nunca respondidas.",
+        "Acesse todas as mensagens trocadas, até as que foram apagadas ou nunca respondidas.",
     },
     {
       icon: Trash2,
@@ -1407,7 +1896,7 @@ export default function PitchPage({
       stars: 5,
       verified: true,
       quote:
-        "O melhor? A pessoa nem recebeu notificação. É como se nada tivesse acontecido — mas eu vi tudo.",
+        "O melhor? A pessoa nem recebeu notificação. É como se nada tivesse acontecido. Mas eu vi tudo.",
       location: "São Paulo, há 2 dias",
     },
   ];
@@ -1453,7 +1942,7 @@ export default function PitchPage({
     {
       question: "É legal usar essa ferramenta?",
       answer:
-        "Você está acessando informações do seu próprio relacionamento. A ferramenta interpreta dados com base em conexões existentes e contextos interpessoais. Você não está invadindo — está validando sua dúvida com recursos avançados. Segurança emocional também é um direito.",
+        "Você está acessando informações do seu próprio relacionamento. A ferramenta interpreta dados com base em conexões existentes e contextos interpessoais. Você não está invadindo, está validando sua dúvida com recursos avançados. Segurança emocional também é um direito.",
     },
     {
       question: "Quanto tempo leva para acessar as informações?",
@@ -1468,7 +1957,7 @@ export default function PitchPage({
     {
       question: "E se eu não encontrar nada?",
       answer:
-        "Excelente. Isso significa que você estava certo em confiar — e agora pode dormir tranquilo. A ferramenta existe para acabar com a dúvida, não para criar problemas. Mas se houver algo, você vai ver.",
+        "Excelente. Isso significa que você estava certo em confiar, e agora pode dormir tranquilo. A ferramenta existe para acabar com a dúvida, não para criar problemas. Mas se houver algo, você vai ver.",
     },
   ];
 
@@ -1509,7 +1998,7 @@ export default function PitchPage({
           <>
             Descubra a Verdade Sobre <b>{userName}</b>
             <br />
-            Uma tecnologia confidencial usada pela Polícia Federal — agora
+            Uma tecnologia confidencial usada pela Polícia Federal, agora
             vazada e disponível para uso público.
           </>
         );
@@ -1518,7 +2007,7 @@ export default function PitchPage({
           <>
             Antes restrita às operadoras de celular, agora liberada.
             <br />
-            Uma ferramenta usada para identificar criminosos — agora
+            Uma ferramenta usada para identificar criminosos, agora
             disponível para qualquer pessoa.
           </>
         );
@@ -1528,7 +2017,7 @@ export default function PitchPage({
             Descubra a Verdade Sobre <b>{userName}</b>
             <br />
             Um vazamento recente do WhatsApp comprometeu milhares de contas.
-            Agora, com essa falha ainda ativa, você pode acessar tudo — com
+            Agora, com essa falha ainda ativa, você pode acessar tudo com
             apenas o {userName}.
           </>
         );
@@ -1584,7 +2073,7 @@ export default function PitchPage({
               <div className="flex items-center justify-center space-x-2">
                 <TriangleAlert className="w-4 h-4 md:w-5 md:h-5 text-yellow-300 flex-shrink-0" />
                 <p className="text-xs md:text-sm font-semibold text-white">
-                  Análise do backup em andamento — não feche esta página
+                  Análise do backup em andamento. Não feche esta página
                 </p>
               </div>
             </motion.div>
@@ -1666,47 +2155,14 @@ export default function PitchPage({
                 </p>
               </div>
 
-              {/* Player de vídeo estilizado (placeholder) */}
-              <div
-                className="relative w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-black/5"
-                style={{ background: primaryGradient }}
-              >
-                <div className="absolute top-3 left-3 flex items-center space-x-1.5 bg-black/30 backdrop-blur-sm px-2.5 py-1 rounded-full z-10">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                  <span className="text-[10px] font-bold text-white tracking-wide">
-                    AO VIVO
-                  </span>
-                </div>
-
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white/15 backdrop-blur-sm border border-white/40 flex items-center justify-center animate-pulse-gentle"
-                  >
-                    <Play className="w-8 h-8 md:w-9 md:h-9 text-white ml-1" />
-                  </motion.div>
-                </div>
-
-                {/* Barra de progresso do player, sincronizada com a análise */}
-                <div className="absolute bottom-0 left-0 right-0 px-3 pb-2.5">
-                  <div className="flex items-center justify-between text-[10px] text-white/80 font-medium mb-1 tabular-nums">
-                    <span>
-                      {formatTime(Math.floor((analysisPercent / 100) * 60))}
-                    </span>
-                    <span>{formatTime(60)}</span>
-                  </div>
-                  <div className="w-full h-1 rounded-full bg-white/25 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-white"
-                      style={{
-                        width: `${analysisPercent}%`,
-                        transition: "width 0.15s linear",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
+              {/* VSL. O player traz os próprios controles, então aqui não
+                  entra mais play nem barra falsos: eles ficariam por cima
+                  dos de verdade. O tempo do vídeo passa a comandar a
+                  análise. */}
+              <VslPlayer
+                onProgresso={aplicarProgressoVideo}
+                onPlay={marcarPlay}
+              />
 
               <p className="flex items-center justify-center space-x-1.5 text-xs text-gray-500">
                 <Volume2 className="w-4 h-4" />
@@ -1823,8 +2279,19 @@ export default function PitchPage({
                     >
                       {Math.round(analysisPercent)}%
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {isUnlocked ? "Concluído" : "Analisando"}
+                    <p className="text-xs text-gray-500 mt-1 tabular-nums">
+                      {isUnlocked
+                        ? "Concluído"
+                        : /* Restante calculado sobre a duração real do vídeo:
+                             a análise termina quando a VSL termina. */
+                          `faltam ${formatTime(
+                            Math.max(
+                              0,
+                              Math.ceil(
+                                VSL_DURACAO_S * (1 - analysisPercent / 100)
+                              )
+                            )
+                          )}`}
                     </p>
                   </div>
                 </div>
@@ -2330,20 +2797,21 @@ export default function PitchPage({
                           }}
                         >
                           {block.mock === "chat" && (
-                            <MockChat alvo={currentUsername} />
+                            <MockChat alvo={currentUsername} foto={profileImageUrl} />
                           )}
                           {block.mock === "gallery" && (
-                            <MockGallery alvo={currentUsername} />
+                            <MockGallery alvo={currentUsername} foto={profileImageUrl} />
                           )}
                           {block.mock === "map" && (
                             <MockMap
                               alvo={currentUsername}
                               place={leadPlace}
                               coords={leadCoords}
+                              foto={profileImageUrl}
                             />
                           )}
                           {block.mock === "audio" && (
-                            <MockAudio alvo={currentUsername} />
+                            <MockAudio alvo={currentUsername} foto={profileImageUrl} />
                           )}
                         </div>
                       </div>
@@ -2796,7 +3264,7 @@ export default function PitchPage({
                   <span className="font-bold text-white">
                     difícil de ver
                   </span>
-                  . Só prossiga se estiver pronto para saber a verdade — sem
+                  . Só prossiga se estiver pronto para saber a verdade, sem
                   filtro e sem volta.
                 </motion.p>
               </div>
@@ -3033,53 +3501,7 @@ export default function PitchPage({
                 </p>
               </div>
 
-              {/* rolagem horizontal com encaixe: três vídeos sem empilhar
-                  meia tela de altura no celular */}
-              <div
-                className="flex gap-3 overflow-x-auto px-5 pb-5 pt-3 snap-x snap-mandatory"
-                style={{ scrollbarWidth: "none" }}
-              >
-                {DEPOIMENTOS.map((d) => (
-                  <figure
-                    key={d.arquivo}
-                    className="snap-center flex-shrink-0 w-[208px] rounded-2xl overflow-hidden"
-                    style={{
-                      backgroundColor: "#111B21",
-                      border: "1px solid rgba(255,255,255,0.06)",
-                    }}
-                  >
-                    <video
-                      src={`/depoimentos/${d.arquivo}#t=1.5`}
-                      controls
-                      playsInline
-                      preload="metadata"
-                      className="w-full bg-black"
-                      style={{ aspectRatio: "1 / 1", objectFit: "cover" }}
-                    />
-                    <figcaption className="px-3 py-2.5">
-                      <div className="flex items-center gap-1 mb-1">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star
-                            key={i}
-                            className="w-3 h-3"
-                            style={{ color: "#F59E0B" }}
-                            fill="#F59E0B"
-                          />
-                        ))}
-                      </div>
-                      <p className="text-[12.5px] font-bold text-white leading-tight">
-                        {d.nome}
-                      </p>
-                      <p
-                        className="text-[11px] leading-snug mt-0.5"
-                        style={{ color: "#8696A0" }}
-                      >
-                        {d.legenda}
-                      </p>
-                    </figcaption>
-                  </figure>
-                ))}
-              </div>
+              <DepoimentosCarrossel />
 
               <div
                 className="flex items-center justify-center gap-1.5 px-5 pb-4"
@@ -3152,7 +3574,7 @@ export default function PitchPage({
                   className="text-[13.5px] leading-relaxed mb-5"
                   style={{ color: "#8696A0" }}
                 >
-                  Ignorar os sinais não faz o problema sumir — só adia. A
+                  Ignorar os sinais não faz o problema sumir, só adia. A
                   análise é totalmente oculta:{" "}
                   <span className="font-bold" style={{ color: primaryBright }}>
                     {currentUsername} nunca vai saber
@@ -3218,7 +3640,7 @@ export default function PitchPage({
                   custom={4}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  href="https://go.perfectpay.com.br/PPU38CPQDG9"
+                  href={checkoutUrl}
                   onClick={() => {
                     import("react-facebook-pixel")
                       .then((x) => x.default)
@@ -3478,7 +3900,7 @@ export default function PitchPage({
                       });
                     });
                 }}
-                href="https://go.perfectpay.com.br/PPU38CPQDG9"
+                href={checkoutUrl}
                 className="flex-1 text-center font-bold py-3 px-5 rounded-full text-white text-sm sm:text-base shadow-lg"
                 style={{
                   background: primaryGradient,

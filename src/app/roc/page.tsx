@@ -1,6 +1,5 @@
 "use client";
 
-import Script from "next/script";
 import ProfileConfirmModal from "../components/ProfileConfirmModal";
 import LoadingAnalysis from "../components/LoadingAnalysis";
 import InstagramDirect from "../components/InstagramDirect";
@@ -99,13 +98,6 @@ export default function RocPage(props: HomeProps) {
         setSelectedChat={navigation.setSelectedChat}
       />
 
-      <Script
-        src="https://cdn.utmify.com.br/scripts/utms/latest.js"
-        data-utmify-prevent-subids
-        data-utmify-fast-start
-        async
-        defer
-      />
 
       {/* Layout principal */}
       <div

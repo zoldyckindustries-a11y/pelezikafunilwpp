@@ -17,8 +17,11 @@ import {
   Star,
 } from "lucide-react";
 import { colors } from "../../constants/theme";
+import { useCheckoutUrl } from "../../lib/upsell";
 
-const CHECKOUT_URL = "https://go.perfectpay.com.br/PPU38CPQDG9";
+// Base do checkout. O destino final sai de useCheckoutUrl, que carimba a
+// identificação do lead para o projeto de upsell recuperá-la depois.
+const CHECKOUT_URL = "https://checkout.perfectpay.com.br/pay/PPU38CQHGJS";
 
 // Mesma anatomia dos dossiês da oferta: etiqueta, título, conteúdo em cards
 // internos. A página é uma extensão do funil, não uma tela avulsa.
@@ -62,6 +65,7 @@ function Bloco({
 }
 
 export default function BackRedirect() {
+  const checkoutUrl = useCheckoutUrl(CHECKOUT_URL);
   const [alvo, setAlvo] = useState("o número consultado");
   const [regiao, setRegiao] = useState("");
   const [nomeAlvo, setNomeAlvo] = useState("");
@@ -85,18 +89,13 @@ export default function BackRedirect() {
     }
   }, []);
 
-  // mesmo pixel do resto do funil, senão esta etapa fica fora da medição
+  // O pixel já sobe pelo layout, e esta rota é alcançada com
+  // window.location.href, que recarrega a página — o PageView dela vem de
+  // lá. Aqui fica só o evento próprio da etapa.
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any;
     import("react-facebook-pixel")
       .then((x) => x.default)
       .then((ReactPixel) => {
-        if (!w._fbPixelInitialized) {
-          ReactPixel.init("691938970226836");
-          w._fbPixelInitialized = true;
-        }
-        ReactPixel.pageView();
         ReactPixel.trackCustom("BackRedirectView");
       })
       .catch(() => {
@@ -156,7 +155,7 @@ export default function BackRedirect() {
   const beneficios = [
     "Histórico completo, conversas apagadas e áudios de visualização única.",
     "Localização em tempo real do aparelho, sem deixar rastro.",
-    "Acesso 100% anônimo — a consulta não aparece para ninguém.",
+    "Acesso 100% anônimo. A consulta não aparece para ninguém.",
   ];
 
   return (
@@ -194,7 +193,7 @@ export default function BackRedirect() {
             <p className="text-[13.5px] leading-relaxed" style={{ color: "#8696A0" }}>
               O que recuperamos do backup fica em memória temporária. Se você
               sair agora, a sessão é encerrada e tudo que foi encontrado é
-              descartado — para refazer, a varredura começa do zero.
+              descartado. Para refazer, a varredura começa do zero.
             </p>
           </Bloco>
 
@@ -237,7 +236,7 @@ export default function BackRedirect() {
               />
               <p className="text-[12.5px] leading-snug" style={{ color: "#8696A0" }}>
                 Buscando dados criptografados do número selecionado. A conexão
-                cai quando a sessão expira — e o histórico volta a ficar
+                cai quando a sessão expira e o histórico volta a ficar
                 bloqueado.
               </p>
             </div>
@@ -357,7 +356,7 @@ export default function BackRedirect() {
               <motion.a
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                href={CHECKOUT_URL}
+                href={checkoutUrl}
                 onClick={irParaCheckout}
                 className="flex items-center justify-center w-full font-bold py-4 px-5 rounded-2xl text-[15px] text-white text-center shadow-lg"
                 style={{
@@ -481,7 +480,7 @@ export default function BackRedirect() {
             </p>
 
             <a
-              href={CHECKOUT_URL}
+              href={checkoutUrl}
               onClick={irParaCheckout}
               className="inline-flex items-center gap-1 text-[13.5px] font-bold mb-4"
               style={{ color: colors.primary }}
@@ -514,7 +513,7 @@ export default function BackRedirect() {
           }}
         >
           <a
-            href={CHECKOUT_URL}
+            href={checkoutUrl}
             onClick={irParaCheckout}
             className="flex items-center justify-between gap-3 w-full rounded-2xl px-4 py-3 shadow-2xl"
             style={{

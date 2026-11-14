@@ -305,11 +305,13 @@ export function useNavigation(options: UseNavigationOptions = {}) {
       // The data is already stored in localStorage from handleSearch
       setHasPerformedSearch(true);
       localStorage.setItem("hasPerformedSearch", "true");
-      // Fluxo enxuto: modal -> direct (prévia do WhatsApp) -> pitch
-      navigateTo("direct", { mode: "replace" });
+      // Fluxo: modal -> loading (quebra da criptografia) -> direct -> pitch.
+      // "replace" em vez de "push": a etapa dura ~31s, e voltar para ela pelo
+      // histórico prenderia a pessoa numa tela que empurra adiante sozinha.
+      navigateTo("loading", { mode: "replace" });
     } catch (error) {
       console.error("Error storing user data:", error);
-      navigateTo("direct", { mode: "replace" });
+      navigateTo("loading", { mode: "replace" });
     }
   };
 

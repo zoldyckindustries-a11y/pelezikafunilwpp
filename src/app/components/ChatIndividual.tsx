@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, User, ChevronRight, Phone, Video, CheckCheck, Lock, MoreVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, Phone, Video, CheckCheck, Lock, MoreVertical } from "lucide-react";
 import { getUserLocation } from "../services/locationService";
+import { AvatarContato } from "./AvatarContato";
 import { CHAT_PREVIEWS, rotuloNaoLidas } from "../data/chatPreviews";
 
 interface ChatIndividualProps {
@@ -88,9 +89,12 @@ export default function ChatIndividual({
   // Chat data with complete messages
   const chatData: Record<number, ChatData> = {
     1: {
-      name: "Gatinha_love",
-      username: "@gatinha_love",
-      avatar: "/avatares/avatardirect01.png",
+      // Sem foto e com nome neutro: ver o rosto entregava o gênero, e a
+      // dúvida é justamente o que sustenta a oferta. Ver demoProfiles.ts,
+      // que precisa concordar com isto.
+      name: "Alex",
+      username: "@alex",
+      avatar: "",
       isOnline: true,
       messages: [
         {
@@ -470,9 +474,10 @@ export default function ChatIndividual({
                     className="rounded-full object-cover blur-sm"
                   />
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 blur-sm">
-                    <User className="w-4 h-4" />
-                  </div>
+                  <AvatarContato
+                    nome={chatName || currentChat.name}
+                    tamanho={24}
+                  />
                 )
               ) : (
                 <div className="w-6 h-6"></div>
@@ -1186,12 +1191,10 @@ export default function ChatIndividual({
                   className="rounded-full object-cover blur-sm"
                 />
               ) : (
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center blur-sm"
-                  style={{ backgroundColor: "#F4CF8E" }}
-                >
-                  <User className="w-6 h-6" style={{ color: "#8B5E34" }} />
-                </div>
+                <AvatarContato
+                  nome={chatName || currentChat.name}
+                  tamanho={40}
+                />
               )}
             </div>
 
@@ -1271,9 +1274,10 @@ export default function ChatIndividual({
                       className="rounded-full object-cover blur-sm"
                     />
                   ) : (
-                    <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 blur-sm">
-                      <User className="w-4 h-4" />
-                    </div>
+                    <AvatarContato
+                      nome={chatName || currentChat.name}
+                      tamanho={24}
+                    />
                   )}
                 </div>
                 <div className="max-w-xs lg:max-w-md px-3 py-2 rounded-2xl bg-white shadow-sm text-black">
