@@ -1,0 +1,21 @@
+
+┌─────────────────────────────┐
+│ OpenNext — Cloudflare build │
+└─────────────────────────────┘
+
+WARN OpenNext is not fully compatible with Windows.
+WARN For optimal performance, it is recommended to use Windows Subsystem for Linux (WSL).
+WARN While OpenNext may function on Windows, it could encounter unpredictable failures during runtime.
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+Error: The service was stopped
+    at d:\pelezikafunilwpp-main\node_modules\esbuild\lib\main.js:1234:34
+    at responseCallbacks.<computed> (d:\pelezikafunilwpp-main\node_modules\esbuild\lib\main.js:886:9)
+    at Socket.afterClose (d:\pelezikafunilwpp-main\node_modules\esbuild\lib\main.js:877:28)
+    at Socket.emit (node:events:520:35)
+    at endReadableNT (node:internal/streams/readable:1729:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+
+Node.js v24.14.1
