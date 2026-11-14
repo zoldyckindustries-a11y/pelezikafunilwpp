@@ -5,7 +5,6 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lock,
-  LockOpen,
   ChevronRight,
   Search,
   Camera,
@@ -24,6 +23,7 @@ import { colors } from "../../constants/theme";
 import { CHAT_PREVIEWS } from "../data/chatPreviews";
 import { garantirPerfisDemo } from "../data/demoProfiles";
 import { AvatarContato } from "./AvatarContato";
+import { CONVERSA_LIBERADA } from "../data/acessoConversas";
 
 // Tempo de prévia antes do paywall. Longo o bastante para a pessoa ver a
 // mensagem nova chegar e tentar abrir algumas conversas.
@@ -86,7 +86,6 @@ interface Conversation {
   avatar: string | null;
   unreadCount: number;
   isOnline: boolean;
-  status: "unlocked" | "locked";
 }
 
 interface Follower {
@@ -183,7 +182,10 @@ export default function InstagramDirect({
           const hours = String(arrivedAt.getHours()).padStart(2, "0");
           const minutes = String(arrivedAt.getMinutes()).padStart(2, "0");
           return {
-            id: 999,
+            // Abre como qualquer outra, velada. O id precisa caber em
+            // TOTAL_CONVERSAS (ver acessoConversas.ts), senão a navegação
+            // devolve a pessoa para a lista em vez de abrir a conversa.
+            id: 9,
             name: "Maria Silva",
             username: "maria.silva",
             lastMessage: "foi ótimo te ver hoje",
@@ -191,7 +193,6 @@ export default function InstagramDirect({
             avatar: null,
             unreadCount: 1,
             isOnline: true,
-            status: "locked",
           };
         });
       }
@@ -264,7 +265,8 @@ export default function InstagramDirect({
       const unreadCounts = [1, 0, 3, 0, 2, 0, 1, 0];
 
       if (index < 4) {
-        // Unlocked conversations (first 4)
+        // As quatro primeiras têm roteiro escrito. Todas abrem; só a
+        // primeira é legível (ver acessoConversas.ts).
         const profile = unlockedConversationsData[index];
         // prévia vem do mesmo objeto que a tela de conversa usa, para o que
         // a lista promete ser exatamente o que o chat mostra
@@ -282,11 +284,11 @@ export default function InstagramDirect({
           avatar: profile?.profile_pic_url || null,
           unreadCount: previa?.naoLidas ?? unreadCounts[index % unreadCounts.length],
           isOnline: index % 3 === 0,
-          status: "unlocked",
         };
       } else {
-        // Locked conversations (remaining)
-        const follower = followers[index - 4]; // Use followers for locked ones
+        // O resto da lista: contatos sem roteiro próprio. Abrem com uma
+        // conversa gerada, que nasce borrada e nunca chega a ser lida.
+        const follower = followers[index - 4];
         return {
           id: index + 1,
           name: follower?.full_name || "",
@@ -296,7 +298,6 @@ export default function InstagramDirect({
           avatar: follower?.profile_pic_url || null,
           unreadCount: unreadCounts[index % unreadCounts.length],
           isOnline: index % 3 === 0,
-          status: "locked",
         };
       }
     }
@@ -306,21 +307,15 @@ export default function InstagramDirect({
     (conversation) => conversation.name === "Ana Costa"
   );
 
+  // Toda conversa abre. O que separa a liberada das outras é o que existe
+  // dentro, não o toque: uma lista em que metade das linhas não responde ao
+  // dedo deixa de parecer um aplicativo no primeiro toque.
   const handleChatSelectInternal = (chat: Conversation) => {
-    if (chat.status === "unlocked") {
-      // Store chat information in localStorage
-      localStorage.setItem("selectedChatName", chat.name);
-      localStorage.setItem("selectedChatAvatar", chat.avatar || "");
-      // Quem abre a conversa é o pai: é ele quem registra a etapa na URL.
-      if (onChatSelect) {
-        onChatSelect(chat.id);
-      }
-    } else {
-      setBlockedChatIdForPitch(chat.id);
-      setShowBlockedToast(true);
-      setTimeout(() => {
-        setShowBlockedToast(false);
-      }, 3000);
+    localStorage.setItem("selectedChatName", chat.name);
+    localStorage.setItem("selectedChatAvatar", chat.avatar || "");
+    // Quem abre a conversa é o pai: é ele quem registra a etapa na URL.
+    if (onChatSelect) {
+      onChatSelect(chat.id);
     }
   };
 
@@ -626,11 +621,7 @@ export default function InstagramDirect({
               transition={{ type: "spring", stiffness: 400, damping: 35 }}
               role="button"
               tabIndex={0}
-              className={`flex items-center py-3 ${
-                newIncomingConversation.status === "locked"
-                  ? "opacity-70 cursor-not-allowed"
-                  : "cursor-pointer hover:bg-gray-50"
-              } transition-colors duration-150`}
+              className="flex items-center py-3 cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition-colors duration-150"
               onClick={() => handleChatSelectInternal(newIncomingConversation)}
             >
               <div className="relative mr-3">
@@ -653,7 +644,7 @@ export default function InstagramDirect({
                   {newIncomingConversation.name}
                 </h3>
                 <p
-                  className="text-sm truncate mr-2"
+                  className="text-sm truncate mr-2 blur-sm select-none"
                   style={{
                     fontFamily: "Helvetica Neue, Arial, sans-serif",
                     fontSize: "13px",
@@ -667,7 +658,6 @@ export default function InstagramDirect({
 
               <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
                 <div className="flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-red-500" />
                   <span
                     className="text-xs"
                     style={{
@@ -705,11 +695,7 @@ export default function InstagramDirect({
             role="button"
             tabIndex={0}
             aria-label={`Conversa com ${conversation.name || "contato"}`}
-            className={`flex items-center py-3 ${
-              conversation.status === "unlocked"
-                ? "cursor-pointer hover:bg-gray-50"
-                : "opacity-70 cursor-not-allowed"
-            } ${
+            className={`flex items-center py-3 cursor-pointer hover:bg-gray-50 active:bg-gray-100 ${
               blurStartIndex !== -1 && index >= blurStartIndex
                 ? "blur-sm select-none"
                 : ""
@@ -739,12 +725,10 @@ export default function InstagramDirect({
             </div>
 
             <div className="flex-1 min-w-0">
+              {/* O nome fica velado em todas: saber COM QUEM é justamente o
+                  que a oferta vende. */}
               <h3
-                className={`text-sm font-semibold text-gray-800 truncate ${
-                  conversation.status === "unlocked"
-                    ? "blur-sm select-none"
-                    : ""
-                }`}
+                className="text-sm font-semibold text-gray-800 truncate blur-sm select-none"
                 style={{
                   fontFamily: "Helvetica Neue, Arial, sans-serif",
                   fontSize: "15px",
@@ -754,11 +738,14 @@ export default function InstagramDirect({
               </h3>
 
               <div className="flex items-center">
+                {/* Só a prévia da conversa descriptografada é legível, e ela
+                    é a isca: a linha que dá para ler é a razão de a pessoa
+                    tocar nas outras. */}
                 <p
                   className={`text-sm truncate mr-2 ${
-                    conversation.status === "unlocked"
-                      ? "blur-sm select-none"
-                      : ""
+                    conversation.id === CONVERSA_LIBERADA
+                      ? ""
+                      : "blur-sm select-none"
                   }`}
                   style={{
                     fontFamily: "Helvetica Neue, Arial, sans-serif",
@@ -774,13 +761,11 @@ export default function InstagramDirect({
 
             {/* Coluna da direita: horário em cima, badge de não lidas embaixo,
                 rente à direita — igual ao padrão real do WhatsApp */}
+            {/* Sem cadeado por linha: o WhatsApp não tem essa coluna, e era
+                o detalhe que mais denunciava a tela. Quem está trancado o
+                borrão já diz. */}
             <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
               <div className="flex items-center gap-1.5">
-                {conversation.status === "unlocked" ? (
-                  <LockOpen className="w-3.5 h-3.5 text-green-500" />
-                ) : (
-                  <Lock className="w-3.5 h-3.5 text-red-500" />
-                )}
                 <span
                   className="text-xs"
                   style={{

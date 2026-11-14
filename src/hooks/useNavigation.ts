@@ -4,10 +4,12 @@ import {
   CHAT_PARAM,
   ETAPA_PARAM,
   garantirIndiceNav,
+  indiceNavAtual,
   lerParam,
   voltar,
   escreverParams,
 } from "../lib/urlState";
+import { conversaExiste } from "../app/data/acessoConversas";
 
 const formatPhoneNumber = (value: string) => {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -48,9 +50,15 @@ const SCREENS: NavigationScreen[] = [
   "pitch",
 ];
 
-// Conversas liberadas na prévia. As demais exigem o desbloqueio, então uma
-// URL apontando para elas volta para a lista em vez de abrir a tela vazia.
-const CHATS_LIBERADOS = [1, 2, 3, 4];
+// Etapas das quais o lead não sai sem passar pela oferta de retorno. São as
+// posteriores à análise: até ali ele ainda está decidindo se entra; daqui em
+// diante já viu a prova e sair é desistir.
+const TELAS_COM_RETENCAO: NavigationScreen[] = ["direct", "chat", "pitch"];
+
+const BACK_REDIRECT_URL = "/back-redirect";
+// Uma vez só por sessão. Insistir a cada "voltar" prende a pessoa na página,
+// irrita e ainda é bloqueado por navegador moderno.
+const CHAVE_BACK_REDIRECT = "backRedirectUsado";
 
 interface UrlState {
   screen: NavigationScreen;
@@ -67,7 +75,9 @@ function lerEstadoDaUrl(): UrlState | null {
   const screen = etapa as NavigationScreen;
   const chatParam = lerParam(CHAT_PARAM);
   const chatId = chatParam ? Number(chatParam) : null;
-  const chatValido = chatId !== null && CHATS_LIBERADOS.includes(chatId);
+  // Todas as conversas da lista abrem — só uma delas é legível. Quem decide
+  // o que aparece dentro é o ChatIndividual, não a navegação.
+  const chatValido = conversaExiste(chatId);
 
   if (screen === "chat") {
     return chatValido
@@ -124,14 +134,29 @@ export function useNavigation(options: UseNavigationOptions = {}) {
   const searchTokenRef = useRef(0);
   const autoSearchRef = useRef(false);
 
+  // Etapa atual em ref: o ouvinte de popstate é registrado uma vez só, e um
+  // valor preso no closure faria a retenção ler sempre a etapa inicial.
+  const screenRef = useRef<NavigationScreen>(telaInicial);
+
   const applyScreen = useCallback(
     (next: NavigationScreen, chatId: number | null) => {
+      screenRef.current = next;
       setScreen(next);
       setSelectedChatId(next === "chat" ? chatId : null);
       setIsTransitioning(false);
     },
     []
   );
+
+  /** Leva para a oferta de retorno. Devolve false se já tiver sido usada
+   *  nesta sessão — aí o "voltar" segue o caminho normal. */
+  const ofertarRetorno = useCallback(() => {
+    if (typeof window === "undefined") return false;
+    if (sessionStorage.getItem(CHAVE_BACK_REDIRECT) === "1") return false;
+    sessionStorage.setItem(CHAVE_BACK_REDIRECT, "1");
+    window.location.href = BACK_REDIRECT_URL;
+    return true;
+  }, []);
 
   // A URL é a fonte da verdade da navegação: no mount ela diz em que etapa
   // estamos (link direto cai no lugar certo) e no popstate o botão voltar
@@ -153,14 +178,40 @@ export function useNavigation(options: UseNavigationOptions = {}) {
         clearTimeout(transitionTimerRef.current);
         transitionTimerRef.current = null;
       }
+
+      const atual = screenRef.current;
       const proximo = lerEstadoDaUrl();
+
+      // Passada a análise, o funil só anda para a frente. A única volta que
+      // continua fazendo sentido é sair de uma conversa para a lista — é o
+      // gesto que a pessoa usa para abrir outra, não para desistir.
+      //
+      // Todo o resto (voltar da oferta, voltar da lista, voltar de uma
+      // conversa aberta por link direto) é abandono, e abandono passa pela
+      // recuperação. Depois de oferecida uma vez, o caminho volta ao normal:
+      // insistir prende a pessoa na página e irrita.
+      if (TELAS_COM_RETENCAO.includes(atual)) {
+        const voltaInterna = atual === "chat" && proximo?.screen === "direct";
+        if (!voltaInterna && ofertarRetorno()) return;
+      }
+
       if (!proximo) return;
       applyScreen(proximo.screen, proximo.chatId);
     };
 
     window.addEventListener("popstate", aoVoltar);
     return () => window.removeEventListener("popstate", aoVoltar);
-  }, [applyScreen]);
+  }, [applyScreen, ofertarRetorno]);
+
+  // Link direto para uma etapa de retenção (?etapa=pitch numa aba nova) não
+  // tem histórico interno: o "voltar" sairia do site sem disparar popstate e
+  // a recuperação nunca rodaria. Uma entrada extra dá o que consumir.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!TELAS_COM_RETENCAO.includes(screen)) return;
+    if (indiceNavAtual() > 0) return;
+    escreverParams({}, "push");
+  }, [screen]);
 
   const navigateTo = useCallback(
     (
@@ -359,20 +410,6 @@ export function useNavigation(options: UseNavigationOptions = {}) {
     });
   };
 
-  const handleBackFromPitch = () => {
-    // O chat de origem fica na URL: se a oferta veio de uma conversa, o
-    // voltar precisa voltar para ela, não para a lista.
-    const chatParam = lerParam(CHAT_PARAM);
-    const origem = chatParam ? Number(chatParam) : null;
-    const chatValido = origem !== null && CHATS_LIBERADOS.includes(origem);
-    voltar(() =>
-      navigateTo(chatValido ? "chat" : "direct", {
-        chatId: chatValido ? origem : null,
-        mode: "replace",
-      })
-    );
-  };
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInstagramHandle(formatPhoneNumber(e.target.value));
     if (!userHasTyped && e.target.value.length > 0) {
@@ -435,7 +472,7 @@ export function useNavigation(options: UseNavigationOptions = {}) {
     handleChatSelect,
     handleBackFromChat,
     handlePitchPage,
-    handleBackFromPitch,
+
     handleNameChange,
     handleInputChange,
     handleInputFocus,

@@ -44,10 +44,11 @@ import { AvatarContato } from "./AvatarContato";
 // identificação do lead para o projeto de upsell recuperá-la após a compra.
 const CHECKOUT_URL = "https://checkout.perfectpay.com.br/pay/PPU38CQHGJS";
 
+// A oferta não tem volta: nem botão na tela, nem "voltar" do navegador
+// (esse é interceptado pelo useNavigation e cai na recuperação). Quem chegou
+// na VSL fica na VSL.
 interface PitchPageProps {
-  onBack: () => void;
   userName: string;
-  hasBack?: boolean;
 }
 
 interface FAQ {
@@ -205,6 +206,31 @@ const ANALYSIS_DURATION_MS = 60000;
 const ANALYSIS_COMPLETE_HOLD_MS = 1200;
 const ANALYSIS_RADIUS = 26;
 const ANALYSIS_CIRCUMFERENCE = 2 * Math.PI * ANALYSIS_RADIUS;
+
+// Volume do backup. Não corresponde a nada real — serve para a análise ter
+// uma unidade de trabalho própria, que avança junto com a barra e não se
+// confunde com o relógio do vídeo.
+const BACKUP_TOTAL_REGISTROS = 12480;
+const BACKUP_LOTES = 7;
+
+const formatarMilhar = (n: number) => n.toLocaleString("pt-BR");
+
+/**
+ * Tempo restante da análise, em linguagem de processo.
+ *
+ * Antes isto era um MM:SS calculado sobre a duração da VSL. O problema é que
+ * um contador em segundos andando no compasso exato do vídeo não parece uma
+ * análise: parece o que de fato é, o tempo que falta para o vídeo acabar.
+ *
+ * Aqui o número vira uma estimativa grossa, que muda de minuto em minuto e
+ * termina em "finalizando". Continua informando duração e avanço — só não
+ * entrega mais que os dois relógios são o mesmo.
+ */
+function estimativaRestante(segundos: number): string {
+  if (segundos <= 45) return "finalizando";
+  if (segundos <= 100) return "menos de 2 min";
+  return `~${Math.ceil(segundos / 60)} min`;
+}
 
 interface AnalysisChecklistItem {
   icon: typeof MessageCircle;
@@ -1273,13 +1299,8 @@ const AccordionItem = ({ faq, index }: { faq: FAQ; index: number }) => {
   );
 };
 
-export default function PitchPage({
-  onBack,
-  userName,
-  hasBack = true,
-}: PitchPageProps) {
+export default function PitchPage({ userName }: PitchPageProps) {
   const checkoutUrl = useCheckoutUrl(CHECKOUT_URL);
-  const [isExiting, setIsExiting] = useState(false);
   const [timeLeft, setTimeLeft] = useState(5 * 60);
   // Sem número (link direto para ?etapa=pitch, ou localStorage limpo), as
   // manchetes terminavam em "enviadas em privado por" e paravam no vazio.
@@ -1290,6 +1311,10 @@ export default function PitchPage({
   const [analysisPercent, setAnalysisPercent] = useState(0);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showVsl, setShowVsl] = useState(true);
+  // Base da estimativa de tempo. Começa na duração da VSL e cai para a do
+  // relógio de retaguarda se o vídeo não assumir o ritmo — sem isso a tela
+  // prometeria "~9 min" numa análise que termina em um.
+  const [duracaoBaseS, setDuracaoBaseS] = useState(VSL_DURACAO_S);
 
   // Ritmo da análise. Em ref, não em estado: são lidos de dentro de
   // intervalos e callbacks do player, onde um valor congelado no closure
@@ -1376,6 +1401,10 @@ export default function PitchPage({
   const aplicarProgressoVideo = useCallback(
     (fracao: number) => {
       fonteProgressoRef.current = "video";
+      // O vídeo pode assumir o ritmo depois do relógio de retaguarda já ter
+      // assumido (play tardio). A base da estimativa volta com ele, senão a
+      // tela anunciaria "finalizando" com oito minutos de VSL pela frente.
+      setDuracaoBaseS(VSL_DURACAO_S);
       publicarProgresso(fracao * 100);
     },
     [publicarProgresso]
@@ -1416,6 +1445,7 @@ export default function PitchPage({
       // pode estar subindo e assumir o ritmo logo em seguida.
       if (decorrido < VIDEO_GRACE_MS) return;
       fonteProgressoRef.current = "relogio";
+      setDuracaoBaseS(ANALYSIS_DURATION_MS / 1000);
       publicarProgresso(
         ((decorrido - VIDEO_GRACE_MS) / ANALYSIS_DURATION_MS) * 100
       );
@@ -1501,11 +1531,6 @@ export default function PitchPage({
     return `${minutes.toString().padStart(2, "0")}:${secs
       .toString()
       .padStart(2, "0")}`;
-  };
-
-  const handleBackWithAnimation = () => {
-    setIsExiting(true);
-    setTimeout(onBack, 300);
   };
 
   const features = [
@@ -2046,7 +2071,7 @@ export default function PitchPage({
           os blocos fixos aqui dentro, cada irmão sem key virava key "" e o
           React acusava chaves duplicadas a cada render. */}
       <AnimatePresence>
-      {!isExiting && (
+      {(
         <motion.div
           key="pitch-page-content"
           initial={{ opacity: 0 }}
@@ -2100,18 +2125,6 @@ export default function PitchPage({
                 </p>
               </div>
             </motion.div>
-          )}
-
-          {/* Voltar: a etapa fica na URL, então o botão consome o histórico */}
-          {hasBack && (
-            <button
-              onClick={handleBackWithAnimation}
-              aria-label="Voltar"
-              className="fixed top-3 left-3 z-[60] w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
-              style={{ backgroundColor: "rgba(0, 0, 0, 0.35)" }}
-            >
-              <ArrowLeft className="w-5 h-5 text-white" />
-            </button>
           )}
 
           {/* Conteúdo da Página */}
@@ -2279,24 +2292,46 @@ export default function PitchPage({
                     >
                       {Math.round(analysisPercent)}%
                     </p>
-                    <p className="text-xs text-gray-500 mt-1 tabular-nums">
+                    <p className="text-xs text-gray-500 mt-1">
                       {isUnlocked
                         ? "Concluído"
-                        : /* Restante calculado sobre a duração real do vídeo:
-                             a análise termina quando a VSL termina. */
-                          `faltam ${formatTime(
+                        : /* Estimativa grossa, não cronômetro. Ver
+                             estimativaRestante(). */
+                          estimativaRestante(
                             Math.max(
                               0,
                               Math.ceil(
-                                VSL_DURACAO_S * (1 - analysisPercent / 100)
+                                duracaoBaseS * (1 - analysisPercent / 100)
                               )
                             )
-                          )}`}
+                          )}
                     </p>
                   </div>
                 </div>
 
-                <div className="w-full h-1.5 rounded-full bg-gray-200 mt-4 overflow-hidden">
+                {/* Unidade de trabalho própria da análise. É daqui que vem a
+                    sensação de avanço: o número sobe em registros, não em
+                    segundos de vídeo. */}
+                <div className="flex items-baseline justify-between mt-4 mb-1.5">
+                  <span className="text-[11px] font-semibold text-gray-500">
+                    {isUnlocked
+                      ? `Lote ${BACKUP_LOTES} de ${BACKUP_LOTES}`
+                      : `Lote ${Math.min(
+                          BACKUP_LOTES,
+                          Math.floor((analysisPercent / 100) * BACKUP_LOTES) + 1
+                        )} de ${BACKUP_LOTES}`}
+                  </span>
+                  <span className="text-[11px] text-gray-500 tabular-nums">
+                    {formatarMilhar(
+                      Math.round(
+                        (analysisPercent / 100) * BACKUP_TOTAL_REGISTROS
+                      )
+                    )}{" "}
+                    de {formatarMilhar(BACKUP_TOTAL_REGISTROS)} registros
+                  </span>
+                </div>
+
+                <div className="w-full h-1.5 rounded-full bg-gray-200 overflow-hidden">
                   <div
                     className="h-full rounded-full"
                     style={{

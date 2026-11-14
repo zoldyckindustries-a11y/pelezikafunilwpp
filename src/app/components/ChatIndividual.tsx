@@ -7,11 +7,82 @@ import { ChevronLeft, ChevronRight, Phone, Video, CheckCheck, Lock, MoreVertical
 import { getUserLocation } from "../services/locationService";
 import { AvatarContato } from "./AvatarContato";
 import { CHAT_PREVIEWS, rotuloNaoLidas } from "../data/chatPreviews";
+import { conversaLiberada } from "../data/acessoConversas";
 
 interface ChatIndividualProps {
   chatId: number;
   onBack: () => void;
   onPitch: () => void;
+}
+
+interface Message {
+  id: number;
+  type: "text" | "mixed" | "blur" | "audio" | "image" | "location";
+  content: string;
+  sender: "left" | "right";
+  time: string;
+  showTime: boolean;
+  blurContent?: string;
+  afterBlur?: string;
+  title?: string;
+  blurredName?: string;
+}
+
+interface ChatData {
+  name: string;
+  username: string;
+  avatar: string | null;
+  isOnline: boolean;
+  messages: Message[];
+}
+
+// Conversas sem roteiro próprio (da quinta em diante). O texto aqui nunca
+// chega a ser lido: estas conversas nascem borradas e assim ficam. O que
+// precisa existir é a forma — bolhas de larguras diferentes, lados
+// alternando, um áudio e uma foto no meio —, porque é a silhueta de uma
+// conversa que o olho reconhece antes de qualquer palavra.
+const FALAS_VELADAS: Array<Pick<Message, "type" | "content" | "sender">> = [
+  { type: "text", content: "oi, tudo bem? vc tá acordado ainda", sender: "left" },
+  { type: "text", content: "tô sim", sender: "right" },
+  { type: "text", content: "preciso te contar uma coisa mas não aqui", sender: "left" },
+  { type: "audio", content: "0:21", sender: "left" },
+  { type: "text", content: "me liga quando puder falar sozinho", sender: "left" },
+  { type: "text", content: "agora não dá, te chamo mais tarde", sender: "right" },
+  { type: "image", content: "", sender: "left" },
+  { type: "text", content: "apaga isso depois de ver", sender: "left" },
+  { type: "text", content: "pode deixar", sender: "right" },
+  { type: "audio", content: "1:04", sender: "right" },
+  { type: "text", content: "mesma hora de sempre então", sender: "left" },
+  { type: "text", content: "combinado", sender: "right" },
+];
+
+const HORARIOS_VELADOS = [
+  "08:12", "08:14", "08:19", "08:21", "08:26", "09:03",
+  "09:07", "09:08", "09:15", "10:41", "10:44", "10:52",
+];
+
+/**
+ * Monta uma conversa velada estável para um id sem roteiro. O recorte sai do
+ * próprio id, então a mesma conversa tem sempre o mesmo formato: voltar nela
+ * duas vezes e encontrar outra silhueta seria o tipo de detalhe que denuncia.
+ */
+function conversaVelada(chatId: number): ChatData {
+  const inicio = (chatId * 3) % 4;
+  const quantas = 7 + (chatId % 4);
+  const falas = FALAS_VELADAS.slice(inicio, inicio + quantas);
+
+  return {
+    name: "",
+    username: "",
+    avatar: null,
+    isOnline: chatId % 3 === 0,
+    messages: falas.map((fala, i) => ({
+      id: i + 1,
+      ...fala,
+      time: HORARIOS_VELADOS[(inicio + i) % HORARIOS_VELADOS.length],
+      showTime: false,
+    })),
+  };
 }
 
 export default function ChatIndividual({
@@ -64,27 +135,6 @@ export default function ChatIndividual({
     setAnimateCard(true);
     setTimeout(() => setAnimateCard(false), 500); // Remove animation after 0.5s
   };
-
-  interface Message {
-    id: number;
-    type: "text" | "mixed" | "blur" | "audio" | "image" | "location";
-    content: string;
-    sender: "left" | "right";
-    time: string;
-    showTime: boolean;
-    blurContent?: string;
-    afterBlur?: string;
-    title?: string;
-    blurredName?: string;
-  }
-
-  interface ChatData {
-    name: string;
-    username: string;
-    avatar: string | null;
-    isOnline: boolean;
-    messages: Message[];
-  }
 
   // Chat data with complete messages
   const chatData: Record<number, ChatData> = {
@@ -405,7 +455,19 @@ export default function ChatIndividual({
     },
   };
 
-  const currentChat = chatData[chatId as keyof typeof chatData];
+  // Só uma conversa foi descriptografada. As outras abrem igual — mesma
+  // tela, mesmo cabeçalho, mesmo campo de mensagem — e nada nelas é legível.
+  const liberado = conversaLiberada(chatId);
+
+  // Véu do corpo da conversa. Na liberada o texto aparece; nas demais, um
+  // borrão mais forte que o dos trechos ocultos, para que nem se tente ler.
+  const veu = liberado ? "" : "blur-[6px] select-none";
+
+  const currentChat =
+    chatData[chatId as keyof typeof chatData] ?? conversaVelada(chatId);
+  // A prévia continua existindo nas bloqueadas — o divisor de não lidas tem
+  // que bater com o badge que a lista mostrou —, só que ilegível. Quem abre
+  // vê que a mensagem está lá; não vê o que ela diz.
   const previa = CHAT_PREVIEWS[chatId];
   const divisorRef = useRef<HTMLDivElement>(null);
 
@@ -422,10 +484,6 @@ export default function ChatIndividual({
     }, 450);
     return () => clearTimeout(t);
   }, [previa]);
-
-  if (!currentChat) {
-    return <div>Conversa não encontrada</div>;
-  }
 
   const renderMessage = (
     message: Message,
@@ -450,7 +508,7 @@ export default function ChatIndividual({
         {showTime && (
           <div className="text-center my-4">
             <span className="text-xs text-gray-400">
-              <span className="blur-sm select-none">ONTEM</span>,{" "}
+              <span className={veu || "blur-sm select-none"}>ONTEM</span>,{" "}
               {message.time}
             </span>
           </div>
@@ -509,7 +567,9 @@ export default function ChatIndividual({
                   <path d="M0 5.54924V33.4508C0 37.2749 4.11828 39.6835 7.4513 37.8086L32.2527 23.8579C35.6509 21.9464 35.6509 17.0536 32.2527 15.1421L7.45131 1.19136C4.11829 -0.683463 0 1.72511 0 5.54924Z" />
                 </svg>
                 <span
-                  className="text-sm font-medium blur-sm select-none"
+                  className={`text-sm font-medium ${
+                    veu || "blur-sm select-none"
+                  }`}
                   style={{ color: isLeft ? "#6C707B" : "#4A4A4A" }}
                 >
                   Foto
@@ -545,20 +605,16 @@ export default function ChatIndividual({
               style={!isLeft ? { backgroundColor: "#D9FDD3" } : {}}
             >
               {message.type === "text" && (
-                <p
-                  className="blur-sm select-none"
-                  style={{ fontSize: "15px" }}
-                >
+                <p className={veu} style={{ fontSize: "15px" }}>
                   {message.content}
                 </p>
               )}
 
               {message.type === "mixed" && (
-                <p
-                  className="blur-sm select-none"
-                  style={{ fontSize: "15px" }}
-                >
+                <p className={veu} style={{ fontSize: "15px" }}>
                   {message.content}{" "}
+                  {/* O trecho oculto segue borrado mesmo na conversa
+                      liberada: é ele que faz a leitura doer. */}
                   <span className="blur-sm select-none">
                     {message.blurContent}
                   </span>
@@ -569,7 +625,7 @@ export default function ChatIndividual({
               {message.type === "blur" && (
                 <div className="relative">
                   <p
-                    className="blur-sm select-none"
+                    className={veu || "blur-sm select-none"}
                     style={{ fontSize: "17px" }}
                   >
                     {message.content}
@@ -1107,7 +1163,7 @@ export default function ChatIndividual({
                     <span
                       className={`text-xs ml-2 ${
                         isLeft ? "text-gray-600" : "text-gray-700"
-                      } blur-sm select-none`}
+                      } ${veu}`}
                     >
                       {message.content}
                     </span>
@@ -1117,7 +1173,7 @@ export default function ChatIndividual({
                     <span
                       className={`text-xs ${
                         isLeft ? "text-gray-500" : "text-gray-600"
-                      } blur-sm select-none`}
+                      } ${veu || "blur-sm select-none"}`}
                     >
                       Ver transcrição
                     </span>
@@ -1128,13 +1184,13 @@ export default function ChatIndividual({
               {message.type === "location" && (
                 <div>
                   <p
-                    className="font-semibold text-black blur-sm select-none"
+                    className={`font-semibold text-black ${veu}`}
                     style={{ fontSize: "15px" }}
                   >
                     {message.title}
                   </p>
                   <p
-                    className="text-gray-600 blur-sm select-none"
+                    className={`text-gray-600 ${veu}`}
                     style={{ fontSize: "13px" }}
                   >
                     <span className="blur-sm select-none">
@@ -1237,7 +1293,7 @@ export default function ChatIndividual({
           {/* Single time at the top of the conversation */}
           <div className="text-center mb-6">
             <span className="text-xs text-gray-400">
-              <span className="blur-sm select-none">ONTEM</span>, 14:32
+              <span className={veu || "blur-sm select-none"}>ONTEM</span>, 14:32
             </span>
           </div>
 
@@ -1281,7 +1337,7 @@ export default function ChatIndividual({
                   )}
                 </div>
                 <div className="max-w-xs lg:max-w-md px-3 py-2 rounded-2xl bg-white shadow-sm text-black">
-                  <p style={{ fontSize: "15px" }}>
+                  <p className={veu} style={{ fontSize: "15px" }}>
                     {previa.ultimaMensagem}
                     {previa.trechoOculto && (
                       <span className="blur-sm select-none ml-1">
@@ -1323,12 +1379,19 @@ export default function ChatIndividual({
                 strokeWidth={2.5}
               />
             </div>
+            {/* A conversa liberada está incompleta; as outras sequer foram
+                abertas. São promessas diferentes, e dizer a mesma frase nas
+                duas faria a tela mentir para quem compara. */}
             <div className="min-w-0 flex-1">
               <p className="text-white text-[13.5px] font-bold leading-snug mb-0.5">
-                Esta conversa está incompleta
+                {liberado
+                  ? "Esta conversa está incompleta"
+                  : "Conversa ainda criptografada"}
               </p>
               <p className="text-white/70 text-[11.5px] leading-snug">
-                Áudios, fotos e mensagens apagadas seguem bloqueados.
+                {liberado
+                  ? "Áudios, fotos e mensagens apagadas seguem bloqueados."
+                  : "A prévia descriptografou só uma conversa. Esta continua fechada."}
               </p>
             </div>
             <button

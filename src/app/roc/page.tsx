@@ -38,10 +38,7 @@ export default function RocPage(props: HomeProps) {
   // Se está na tela de pitch, mostrar apenas ela
   if (navigation.showPitch) {
     return (
-      <PitchPage
-        onBack={navigation.handleBackFromPitch}
-        userName={navigation.instagramHandle}
-      />
+      <PitchPage userName={navigation.instagramHandle} />
     );
   }
 

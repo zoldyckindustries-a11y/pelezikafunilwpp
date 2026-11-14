@@ -28,6 +28,15 @@ function indiceAtual(): number {
 }
 
 /**
+ * Quantas entradas de histórico interno existem atrás da atual. Zero
+ * significa que o próximo "voltar" leva para fora do funil — é o momento em
+ * que a oferta de retorno precisa aparecer.
+ */
+export function indiceNavAtual(): number {
+  return indiceAtual();
+}
+
+/**
  * Garante que a entrada atual do histórico tenha um índice de navegação.
  * Sem isso, um link direto (deep link) não teria histórico interno para
  * consumir e o botão "voltar" cairia sempre no destino alternativo.

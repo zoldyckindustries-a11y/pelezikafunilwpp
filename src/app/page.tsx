@@ -62,7 +62,6 @@ export default function Home(props: HomeProps) {
         : "";
     return (
       <PitchPage
-        onBack={navigation.handleBackFromPitch}
         userName={searchedUsername || navigation.instagramHandle}
       />
     );
